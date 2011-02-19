@@ -1,0 +1,17 @@
+<package>
+  <description brief="NUTracker">
+
+     Microsoft Kinect based skeleton tracker.  Created by the LIMS Lab at Northwestern University.  Based off of work done by MIT and Willow Labs. 
+
+  </description>
+  <author>John Ware</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/Tracker</url>
+  <depend package="body_msgs"/>
+  <depend package="openni"/>
+  <depend package="mapping_msgs"/>
+
+</package>
+
+
