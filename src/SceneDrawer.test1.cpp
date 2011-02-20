@@ -22,13 +22,17 @@
 
 
 
-
 //---------------------------------------------------------------------------
 // Includes
 //---------------------------------------------------------------------------
 #include "SceneDrawer.test1.h"
-
 #include <GL/glut.h>
+
+
+//---------------------------------------------------------------------------
+// Variables
+//---------------------------------------------------------------------------
+#define MAX_DEPTH 10000
 
 extern xn::UserGenerator g_UserGenerator;
 extern xn::DepthGenerator g_DepthGenerator;
@@ -39,56 +43,9 @@ extern XnBool g_bDrawSkeleton;
 extern XnBool g_bPrintID;
 extern XnBool g_bPrintState;
 
-
-#define MAX_DEPTH 10000
 float g_pDepthHist[MAX_DEPTH];
-unsigned int getClosestPowerOfTwo(unsigned int n)
-{
-  unsigned int m = 2;
-  while(m < n) m<<=1;
-
-  return m;
-}
-GLuint initTexture(void** buf, int& width, int& height)
-{
-  GLuint texID = 0;
-  glGenTextures(1,&texID);
-
-  width = getClosestPowerOfTwo(width);
-  height = getClosestPowerOfTwo(height); 
-  *buf = new unsigned char[width*height*4];
-  glBindTexture(GL_TEXTURE_2D,texID);
-
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-  return texID;
-}
-
 GLfloat texcoords[8];
-void DrawRectangle(float topLeftX, float topLeftY, float bottomRightX, float bottomRightY)
-{
-  GLfloat verts[8] = {	topLeftX, topLeftY,
-			topLeftX, bottomRightY,
-			bottomRightX, bottomRightY,
-			bottomRightX, topLeftY
-  };
-  glVertexPointer(2, GL_FLOAT, 0, verts);
-  glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-
-  //TODO: Maybe glFinish needed here instead - if there's some bad graphics crap
-  glFlush();
-}
-void DrawTexture(float topLeftX, float topLeftY, float bottomRightX, float bottomRightY)
-{
-  glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-  glTexCoordPointer(2, GL_FLOAT, 0, texcoords);
-
-  DrawRectangle(topLeftX, topLeftY, bottomRightX, bottomRightY);
-
-  glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-}
-
+XnUInt32 nColors = 10;
 XnFloat Colors[][3] =
   {
     {0,1,1},
@@ -103,8 +60,99 @@ XnFloat Colors[][3] =
     {1,1,.5},
     {1,1,1}
   };
-XnUInt32 nColors = 10;
 
+
+//---------------------------------------------------------------------------
+// Functions
+//---------------------------------------------------------------------------
+
+// find nearest lesser power of two
+unsigned int getClosestPowerOfTwo(unsigned int n)
+{
+  unsigned int m = 2;
+  while(m < n) m<<=1;
+
+  return m;
+}
+
+
+// setup opengl texture
+GLuint initTexture(void** buf, int& width, int& height)
+{
+  GLuint texID = 0;  // unsigned binary integer
+
+  // glGenTextures: generate texture names
+  // arg1: number of textures to be generated
+  // arg2: array where the generated texture names are stored
+  glGenTextures(1,&texID);
+
+  width = getClosestPowerOfTwo(width);
+  height = getClosestPowerOfTwo(height); 
+  *buf = new unsigned char[width*height*4];
+
+  // glBindTexture: bind a named texture to a texturing target
+  // arg1: specifies the target to which the texture is bound
+  // arg2: specifies the name of a texture
+  glBindTexture(GL_TEXTURE_2D,texID);
+
+  // glTexParameteri: sets texture parameters
+  // arg1: the target texture
+  // arg2: the symbolic name of a texture parameter
+  // arg3: the value of arg2
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+  return texID;
+}
+
+
+// draw a rectangle from two specified corners
+void DrawRectangle(float topLeftX, float topLeftY, float bottomRightX, float bottomRightY)
+{
+  GLfloat verts[8] = {	topLeftX, topLeftY,
+			topLeftX, bottomRightY,
+			bottomRightX, bottomRightY,
+			bottomRightX, topLeftY
+  };
+  
+  // glVertexPointer: define an array of vertex data
+  // arg1: specifies the number of coordinates per vertex
+  // arg2: specifies the data type of each coordinate in the array
+  // arg3: specifies the byte offset between consecutive vertices
+  // arg4: specifies a pointer to the first coordinate of the first vertex in the array
+  glVertexPointer(2, GL_FLOAT, 0, verts);  // use specified rectangle corners to define vertices for opengl
+
+  // glDrawArrays: render primitives from array data
+  // arg1: specifies what kind of primitives to render
+  // arg2: specifies the starting index in the enabled arrays
+  // arg3: specifies the number of indices to be rendered
+  glDrawArrays(GL_TRIANGLE_FAN, 0, 4);  // draw triangles between vertices
+
+  //TODO: Maybe glFinish needed here instead - if there's some bad graphics crap
+
+  glFlush();  // force execution of GL commands in finite time
+}
+
+
+// 
+void DrawTexture(float topLeftX, float topLeftY, float bottomRightX, float bottomRightY)
+{
+  glEnableClientState(GL_TEXTURE_COORD_ARRAY);  // enable the texture coordinate array for glDrawArrays
+
+  // glTexCoordPointer: define an array of texture coordinates
+  // arg1: specifies the number of coordinates per array element
+  // arg2: specifies the data type of each texture coordinate
+  // arg3: specifies the byte offset between consecutive texture coordinate sets
+  // arg4: specifies a pointer to the first coordinate of the first texture coordinate set in the array
+  glTexCoordPointer(2, GL_FLOAT, 0, texcoords);
+
+  DrawRectangle(topLeftX, topLeftY, bottomRightX, bottomRightY);  // draw a textured rectangle
+
+  glDisableClientState(GL_TEXTURE_COORD_ARRAY);  // disable the texture coordinate array for glDrawArrays
+}
+
+
+// draw text from specified string in opengl using specified font
 void glPrintString(void *font, char *str)
 {
   int i,l = strlen(str);
@@ -115,33 +163,42 @@ void glPrintString(void *font, char *str)
     }
 }
 
+
+// draw wireframe limb of specified user (player) from specified joint names (eJoint1, eJoint2)
 void DrawLimb(XnUserID player, XnSkeletonJoint eJoint1, XnSkeletonJoint eJoint2)
 {
+  // check to see if user is being tracked and print error if not
   if (!g_UserGenerator.GetSkeletonCap().IsTracking(player))
     {
       printf("not tracked!\n");
       return;
     }
 
+  // get joint positions and confidence
   XnSkeletonJointPosition joint1, joint2;
   g_UserGenerator.GetSkeletonCap().GetSkeletonJointPosition(player, eJoint1, joint1);
   g_UserGenerator.GetSkeletonCap().GetSkeletonJointPosition(player, eJoint2, joint2);
 
+  // check joint confidence and return if too low
   if (joint1.fConfidence < 0.5 || joint2.fConfidence < 0.5)
     {
       return;
     }
 
+  // grab joint positions and put them in an array of xyz data
   XnPoint3D pt[2];
   pt[0] = joint1.position;
   pt[1] = joint2.position;
 
-  g_DepthGenerator.ConvertRealWorldToProjective(2, pt, pt);
+  g_DepthGenerator.ConvertRealWorldToProjective(2, pt, pt);  // do some magic
+
+  // draw wireframes
   glVertex3i(pt[0].X, pt[0].Y, 0);
   glVertex3i(pt[1].X, pt[1].Y, 0);
 }
 
 
+// 
 void DrawDepthMap(const xn::DepthMetaData& dmd, const xn::SceneMetaData& smd)
 {
   static bool bInitialized = false;	
@@ -156,29 +213,36 @@ void DrawDepthMap(const xn::DepthMetaData& dmd, const xn::SceneMetaData& smd)
   float texXpos;
   float texYpos;
 
+  // check if initialization has been run before
   if(!bInitialized)
     {
 
       texWidth =  getClosestPowerOfTwo(dmd.XRes());
-      texHeight = getClosestPowerOfTwo(dmd.YRes());
+      texHeight = getClosestPowerOfTwo(dmd.YRes());  
 
       //		printf("Initializing depth texture: width = %d, height = %d\n", texWidth, texHeight);
       depthTexID = initTexture((void**)&pDepthTexBuf,texWidth, texHeight) ;
 
       //		printf("Initialized depth texture: width = %d, height = %d\n", texWidth, texHeight);
-      bInitialized = true;
+      bInitialized = true;  // set initialization flag to true
 
+      // set background boundaries
       topLeftX = dmd.XRes();
       topLeftY = 0;
       bottomRightY = dmd.YRes();
       bottomRightX = 0;
+
+      // set 
       texXpos =(float)dmd.XRes()/texWidth;
       texYpos  =(float)dmd.YRes()/texHeight;
 
       memset(texcoords, 0, 8*sizeof(float));
-      texcoords[0] = texXpos, texcoords[1] = texYpos, texcoords[2] = texXpos, texcoords[7] = texYpos;
-
+      texcoords[0] = texXpos;
+      texcoords[1] = texYpos; 
+      texcoords[2] = texXpos;
+      texcoords[7] = texYpos;
     }
+
   unsigned int nValue = 0;
   unsigned int nHistValue = 0;
   unsigned int nIndex = 0;
@@ -195,6 +259,7 @@ void DrawDepthMap(const xn::DepthMetaData& dmd, const xn::SceneMetaData& smd)
 
   // Calculate the accumulative histogram
   memset(g_pDepthHist, 0, MAX_DEPTH*sizeof(float));
+
   for (nY=0; nY<g_nYRes; nY++)
     {
       for (nX=0; nX<g_nXRes; nX++)
@@ -215,6 +280,7 @@ void DrawDepthMap(const xn::DepthMetaData& dmd, const xn::SceneMetaData& smd)
     {
       g_pDepthHist[nIndex] += g_pDepthHist[nIndex-1];
     }
+
   if (nNumberOfPoints)
     {
       for (nIndex=1; nIndex<MAX_DEPTH; nIndex++)
@@ -224,9 +290,11 @@ void DrawDepthMap(const xn::DepthMetaData& dmd, const xn::SceneMetaData& smd)
     }
 
   pDepth = dmd.Data();
+
   if (g_bDrawPixels)
     {
       XnUInt32 nIndex = 0;
+
       // Prepare the texture map
       for (nY=0; nY<g_nYRes; nY++)
 	{

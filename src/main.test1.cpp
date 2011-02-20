@@ -21,11 +21,13 @@
 *****************************************************************************/
 
 
+
 //---------------------------------------------------------------------------
 // Includes
 //---------------------------------------------------------------------------
 #include <ros/ros.h>
 #include <ros/package.h>
+
 #include <mapping_msgs/PolygonalMap.h>
 #include <geometry_msgs/Polygon.h>
 #include <body_msgs/Skeletons.h>
@@ -35,11 +37,15 @@
 #include <XnCppWrapper.h>
 #include "SceneDrawer.test1.h"
 
+#include <GL/glut.h>
 
 
 //---------------------------------------------------------------------------
 // Globals
 //---------------------------------------------------------------------------
+#define GL_WIN_SIZE_X 720  // opengl window width
+#define GL_WIN_SIZE_Y 480  // opengl window height
+
 xn::Context g_Context;
 xn::DepthGenerator g_DepthGenerator;
 xn::UserGenerator g_UserGenerator;
@@ -53,59 +59,70 @@ XnBool g_bDrawSkeleton = TRUE;
 XnBool g_bPrintID = TRUE;
 XnBool g_bPrintState = TRUE;
 
-#include <GL/glut.h>
+XnBool g_bPause = false;  // pause flag
+XnBool g_bRecord = false;  // record flag
 
-#define GL_WIN_SIZE_X 720
-#define GL_WIN_SIZE_Y 480
+XnBool g_bQuit = false;  // quit flag
 
-XnBool g_bPause = false;
-XnBool g_bRecord = false;
-
-XnBool g_bQuit = false;
-
-ros::Publisher pmap_pub,skel_pub;
+ros::Publisher pmap_pub,skel_pub;  // ros publishers for polygonal maps and skeletons
 
 
 
 //---------------------------------------------------------------------------
-// Code
+// MIT FUNCTIONS
 //---------------------------------------------------------------------------
+
+// Shutdown prime sense software
 void CleanupExit()
 {
   g_Context.Shutdown();
-
   exit (1);
 }
 
 
-geometry_msgs::Point vecToPt(XnVector3D pt){
-  geometry_msgs::Point ret;
-  ret.x=pt.X/1000.0;
+// Convert a XnVector3D or XnSkeletonJointPosition to xyz coordinates using type Point in package geometry_msgs
+geometry_msgs::Point vecToPt(XnVector3D pt)
+{
+  geometry_msgs::Point ret;  // create a Point variable called ret from the package geometry_msgs
+
+  ret.x=pt.X/1000.0;  // set x in ret of type Point equal to X in pt of type XnVector3D
   ret.y=-pt.Y/1000.0;
   ret.z=pt.Z/1000.0;
-  return ret;
+ 
+  return ret;  // return xyz data in ret of type geometry_msgs
 }
 
 
-geometry_msgs::Point32 vecToPt3(XnVector3D pt){
+// Same as above but with Point32 for higher precision
+geometry_msgs::Point32 vecToPt3(XnVector3D pt)
+{
   geometry_msgs::Point32 ret;
+
   ret.x=pt.X/1000.0;
   ret.y=-pt.Y/1000.0;
   ret.z=pt.Z/1000.0;
+   
   return ret;
 }
 
 
-void getSkeletonJoint(XnUserID player, body_msgs::SkeletonJoint &j, XnSkeletonJoint name){
-  XnSkeletonJointPosition joint1;
-  g_UserGenerator.GetSkeletonCap().GetSkeletonJointPosition(player, name, joint1);
-  j.position= vecToPt(joint1.position);
-  j.confidence = joint1.fConfidence;
+// Get a specified joint position (XnSkeletonJoint name) and its confidence from a specified user (XnUserID player) in xyz coordinates using vecToPt and store the position and confidence in a specified body_msgs variable (SkeletonJoint j)
+void getSkeletonJoint(XnUserID player, body_msgs::SkeletonJoint &j, XnSkeletonJoint name)
+{
+  XnSkeletonJointPosition joint1;  // create a XnSkeletonJointPosition variable called joint 1 that will be used to get hold joint data before converting to body_msgs format
+
+  g_UserGenerator.GetSkeletonCap().GetSkeletonJointPosition(player, name, joint1);  // get joint position of type XnSkeletonJointPosition by passing a specified joint (XnSkeletonJoint name) and a specified user (XnUserID player)
+  j.position= vecToPt(joint1.position);  // use vecToPt to convert joint1 of type XnSkeletonJointPosition to j of type body_sgs::SkeletonJoint
+  j.confidence = joint1.fConfidence;  // take confidence values from joint1 and put them in j
 }
 
 
-void getSkeleton(XnUserID player,body_msgs::Skeleton &skel){
-  skel.playerid=player;
+// use previously defined getSkeletonJoint to convert all Prime Sense skeleton joint positions (XN_SKEL...) and store them in a Skeleton variable from package body_msgs
+void getSkeleton(XnUserID player, body_msgs::Skeleton &skel)
+{
+  skel.playerid=player;  // set specified skeleton playerid as specified player (XnUserID player)
+
+  // convert joint positions to body_msgs format
   getSkeletonJoint(player,skel.head,XN_SKEL_HEAD);
   getSkeletonJoint(player,skel.neck,XN_SKEL_NECK);
   getSkeletonJoint(player,skel.left_shoulder,XN_SKEL_LEFT_SHOULDER);
@@ -124,44 +141,61 @@ void getSkeleton(XnUserID player,body_msgs::Skeleton &skel){
 }
 
 
-void getPolygon(XnUserID player, XnSkeletonJoint eJoint1, XnSkeletonJoint eJoint2, mapping_msgs::PolygonalMap &pmap){
-  XnSkeletonJointPosition joint1, joint2;
+// get specified player (XnUserID player) skeleton joint positions (XnSkeletonJointPosition joint1, joint2) corresponding to specified joints (XnSkeletonJoint ejoint1, ejoint2), check their confidence, put them in p of type Polygon from package geometry_msgs, and store them in pmap of type PolygonalMap from package mapping_msgs
+void getPolygon(XnUserID player, XnSkeletonJoint eJoint1, XnSkeletonJoint eJoint2, mapping_msgs::PolygonalMap &pmap)
+{   
+  XnSkeletonJointPosition joint1, joint2;  // create XnSkeletonJointPosition variable that will be used to hold joint positions
+
+  // get joint positions joint1, joint2
   g_UserGenerator.GetSkeletonCap().GetSkeletonJointPosition(player, eJoint1, joint1);
   g_UserGenerator.GetSkeletonCap().GetSkeletonJointPosition(player, eJoint2, joint2);
 
+  // check joint position confidence 
   if (joint1.fConfidence < 0.5 || joint2.fConfidence < 0.5)
     {
       return;
     }
-  geometry_msgs::Polygon p;
+
+  geometry_msgs::Polygon p;  // create a Polygon variale called p that will hold the two joint positions
+
+  // convert the two joint positions of type XnSkeletonJointPosition to type Point from package geometry_msgs using vecToPt3, and push them into p of type Polygon from package geometry_msgs
   p.points.push_back(vecToPt3(joint1.position));
   p.points.push_back(vecToPt3(joint2.position));
+
+  // push p into pmap of type PolygonalMap from package mapping_msgs
   pmap.polygons.push_back(p);
 }
 
 
-void ptdist(geometry_msgs::Polygon p){
-  geometry_msgs::Point32 p1=p.points.back(),p2=p.points.front();
+// Display distance between two points given a specified Polygon p from package geometry_msgs
+void ptdist(geometry_msgs::Polygon p)
+{  
+  geometry_msgs::Point32 p1=p.points.back(),p2=p.points.front();  // get first and last points from Polygon p
+
+  // print distance between two points
   printf(" Shoulder dist %.02f \n", sqrt((p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y)+(p1.z-p2.z)*(p1.z-p2.z)));
 }
 
 
-void getSkels(std::vector<mapping_msgs::PolygonalMap> &pmaps, body_msgs::Skeletons &skels){
-  XnUserID aUsers[15];
-  XnUInt16 nUsers = 15;
-  g_UserGenerator.GetUsers(aUsers, nUsers);
+// create polygonal maps (PolygonalMap pmaps) of each skeleton being tracked
+void getSkels(std::vector<mapping_msgs::PolygonalMap> &pmaps, body_msgs::Skeletons &skels)
+{
+  XnUserID aUsers[15];  // create an array of type XnUserID
+  XnUInt16 nUsers = 15;  // set max number of users
 
+  g_UserGenerator.GetUsers(aUsers, nUsers);  // get user data
+
+  // get skeleton pmap for each user being tracked
   for (int i = 0; i < nUsers; ++i)
     {
-
+      // check to see if we want to draw skeletons and if we are tracking users
       if (g_bDrawSkeleton && g_UserGenerator.GetSkeletonCap().IsTracking(aUsers[i]))
 	{
 	  body_msgs::Skeleton skel;
-	  getSkeleton(aUsers[i],skel);
-	  skels.skeletons.push_back(skel);
+	  getSkeleton(aUsers[i],skel);  // convert skeleton joint positions into body_msgs format using vecToPt for each joint
+	  skels.skeletons.push_back(skel);  // store Skeleton skel in Skeletons skels
 
-
-
+	  // create polygon for each of the following two Prime Sense joint positions and store them in a polygonal map
 	  mapping_msgs::PolygonalMap pmap;
 	  getPolygon(aUsers[i], XN_SKEL_HEAD, XN_SKEL_NECK, pmap);
 	  //               printPt(aUsers[i], XN_SKEL_RIGHT_HAND);
@@ -183,12 +217,17 @@ void getSkels(std::vector<mapping_msgs::PolygonalMap> &pmaps, body_msgs::Skeleto
 	  getPolygon(aUsers[i], XN_SKEL_RIGHT_KNEE, XN_SKEL_RIGHT_FOOT, pmap);
 	  getPolygon(aUsers[i], XN_SKEL_LEFT_HIP, XN_SKEL_RIGHT_HIP, pmap);
 	  //               getSkel(aUsers[i],pmap);
+
+	  // store this pmap in pmaps
 	  pmaps.push_back(pmap);
 	}
     }
-
 }
 
+
+//---------------------------------------------------------------------------
+// PRIME SENSE FUNCTIONS
+//---------------------------------------------------------------------------
 
 // Callback: New user was detected
 void XN_CALLBACK_TYPE User_NewUser(xn::UserGenerator& generator, XnUserID nId, void* pCookie)
@@ -200,10 +239,11 @@ void XN_CALLBACK_TYPE User_NewUser(xn::UserGenerator& generator, XnUserID nId, v
   //		g_UserGenerator.GetPoseDetectionCap().StartPoseDetection(g_strPose, nId);
   //	}
   //	else{
-  if(g_bhasCal){
-    g_UserGenerator.GetSkeletonCap().LoadCalibrationData(nId, 0);
-    g_UserGenerator.GetSkeletonCap().StartTracking(nId);
-  }
+  if(g_bhasCal)
+    {
+      g_UserGenerator.GetSkeletonCap().LoadCalibrationData(nId, 0);
+      g_UserGenerator.GetSkeletonCap().StartTracking(nId);
+    }
   else{  //never gotten calibration before
     //			g_UserGenerator.GetSkeletonCap().RequestCalibration(nId, TRUE);
     g_UserGenerator.GetPoseDetectionCap().StartPoseDetection(g_strPose, nId);
@@ -224,12 +264,11 @@ void XN_CALLBACK_TYPE UserPose_PoseDetected(xn::PoseDetectionCapability& capabil
 {
   printf("Pose %s detected for user %d\n", strPose, nId);
   g_UserGenerator.GetPoseDetectionCap().StopPoseDetection(nId);
-
-  if(g_bhasCal){
-    g_UserGenerator.GetSkeletonCap().LoadCalibrationData(nId, 0);
-    g_UserGenerator.GetSkeletonCap().StartTracking(nId);
-  }
-
+  if(g_bhasCal)
+    {
+      g_UserGenerator.GetSkeletonCap().LoadCalibrationData(nId, 0);
+      g_UserGenerator.GetSkeletonCap().StartTracking(nId);
+    }
   else{  //never gotten calibration before
     g_UserGenerator.GetSkeletonCap().RequestCalibration(nId, TRUE);
   }
@@ -254,17 +293,14 @@ void XN_CALLBACK_TYPE UserCalibration_CalibrationEnd(xn::SkeletonCapability& cap
       g_UserGenerator.GetSkeletonCap().SaveCalibrationData(nId, 0);
       g_UserGenerator.GetSkeletonCap().StartTracking(nId);
     }
-
   else
     {
       // Calibration failed
       printf("Calibration failed for user %d\n", nId);
-
       if (g_bNeedPose)
 	{
 	  g_UserGenerator.GetPoseDetectionCap().StartPoseDetection(g_strPose, nId);
 	}
-
       else
 	{
 	  g_UserGenerator.GetSkeletonCap().RequestCalibration(nId, TRUE);
@@ -273,71 +309,96 @@ void XN_CALLBACK_TYPE UserCalibration_CalibrationEnd(xn::SkeletonCapability& cap
 }
 
 
+//---------------------------------------------------------------------------
+// OPENGL FUNCTIONS
+//---------------------------------------------------------------------------
+
+// setup opengl, get skeleton points, get polygonal maps, and publish to ros
 // this function is called each frame
 void glutDisplay (void)
 {
-  glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);  // clear buffers (GL_COLOR_BUFFER_BIT and GL_DEPTH_BUFFER_BIT to preset values
 
   // Setup the OpenGL viewpoint
-  glMatrixMode(GL_PROJECTION);
-  glPushMatrix();
-  glLoadIdentity();
+  glMatrixMode(GL_PROJECTION);  // specifies the GL_PROJECTION matrix as the target matrix for subsequent matrix operations
+  glPushMatrix();  // sets the matrix on top of the stack to be identical to the one below it
+  glLoadIdentity();  // sets the matrix on top of the stack to be the identity matrix
 
   xn::SceneMetaData sceneMD;
   xn::DepthMetaData depthMD;
   g_DepthGenerator.GetMetaData(depthMD);
+
+  // glOrtho: multiplies the current matrix with an orthogonal matrix
+  // arg1: coordinates of left clipping plane (0)
+  // arg2: coordinates of right clipping plane (depthMD.XRes())
+  // arg3: coordinates of bottom clipping plane (depthMD.YRes())
+  // arg4: coordinates of top clipping plane (0)
+  // arg5: nearer clipping plane (-1.0)
+  // arg6: farther clipping plane (1.0)
   glOrtho(0, depthMD.XRes(), depthMD.YRes(), 0, -1.0, 1.0);
 
-  glDisable(GL_TEXTURE_2D);
+  glDisable(GL_TEXTURE_2D);  // disable two dimensional texturing
 
+  // check to see if prime sense software is paused
   if (!g_bPause)
     {
       // Read next available data
       g_Context.WaitAndUpdateAll();
- 
     }
- 
-  ros::Time tstamp=ros::Time::now();
-  
+
+  ros::Time tstamp=ros::Time::now();  // define Time variable from ros named tstamp and set it equal to current time
+
   // Process the data
   g_DepthGenerator.GetMetaData(depthMD);
   g_UserGenerator.GetUserPixels(0, sceneMD);
-  DrawDepthMap(depthMD, sceneMD);
-  std::vector<mapping_msgs::PolygonalMap> pmaps;
-  body_msgs::Skeletons skels;
-  getSkels(pmaps,skels);
-  ROS_DEBUG("skels size %d \n",pmaps.size());
-  if(pmaps.size()){
-    skels.header.stamp=tstamp;
-    skels.header.seq = depthMD.FrameID();
-    skels.header.frame_id="/openni_depth_optical_frame";
-    skel_pub.publish(skels);
-    pmaps.front().header.stamp=tstamp;
-    pmaps.front().header.seq = depthMD.FrameID();
-    pmaps.front().header.frame_id="/openni_depth_optical_frame";
-    pmap_pub.publish(pmaps[0]);
-  }
+  DrawDepthMap(depthMD, sceneMD);  // call DrawDepthMap from SceneDrawer.cpp
 
-  glutSwapBuffers();
+  std::vector<mapping_msgs::PolygonalMap> pmaps;  // create a vector of PolygonalMap variables called pmaps
+  body_msgs::Skeletons skels;  // create a Skeletons variable called skells from body_msgs
+  getSkels(pmaps,skels);  // use getSkels to get polygonal maps and skeleton points for all users
+
+  ROS_DEBUG("skels size %d \n",pmaps.size());  // print size of skels to ros under debug (use rxconsole?)
+
+  // check to see if there are any users currently being tracked, fill in relevant information, and publish to ros
+  if(pmaps.size())
+    {
+      skels.header.stamp=tstamp;
+      skels.header.seq = depthMD.FrameID();
+      skels.header.frame_id="/openni_depth_optical_frame";
+
+      skel_pub.publish(skels);  // publish skels
+
+      pmaps.front().header.stamp=tstamp;
+      pmaps.front().header.seq = depthMD.FrameID();
+      pmaps.front().header.frame_id="/openni_depth_optical_frame";
+
+      pmap_pub.publish(pmaps[0]);  // publish pmaps
+    }
+
+  glutSwapBuffers();  // swap the buffers from the back buffer to the current window
 }
 
 
+// redisplay the current data because no new data is available
 void glutIdle (void)
 {
-  if (g_bQuit) {
-    CleanupExit();
-  }
+  if (g_bQuit) 
+    {
+      CleanupExit();
+    }
 
   // Display the frame
-  glutPostRedisplay();
+  glutPostRedisplay();  // marks the current window as needing to be redisplayed
 }
 
 
+// keyboard shortcuts that choose what to display in the viewer
 void glutKeyboard (unsigned char key, int x, int y)
 {
   switch (key)
     {
     case 27:
+      // Exit
       CleanupExit();
     case 'b':
       // Draw background?
@@ -360,6 +421,7 @@ void glutKeyboard (unsigned char key, int x, int y)
       g_bPrintState = !g_bPrintState;
       break;
     case'p':
+      // Pause?
       g_bPause = !g_bPause;
       break;
     }
@@ -368,81 +430,96 @@ void glutKeyboard (unsigned char key, int x, int y)
 
 void glInit (int * pargc, char ** argv)
 {
-  glutInit(pargc, argv);
-  glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
+  // glutInit: initialize the glut library and take in argc and argv from main
+  // arg1: number of command line arguments
+  // arg2: array of command line arguments
+  glutInit(pargc, argv);  
+
+  // glutInitDisplayMode: sets the display mode 
+  // arg1: bitmask for opengl display modes
+  // GLUT_RGB: bit mask to select an RGBA mode window
+  // GLUT_DOUBLE: bit mask to select a double buffered window
+  // GLUT_DEPTH: bit mask to select a window with a depth buffer
+  glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);  
+
+  // glutInitWindowSize: sets window size
+  // arg1: window width (defined at top)
+  // arg2: window height (defined at top)
   glutInitWindowSize(GL_WIN_SIZE_X, GL_WIN_SIZE_Y);
-  glutCreateWindow ("Prime Sense User Tracker Viewer");
-  //glutFullScreen();
-  glutSetCursor(GLUT_CURSOR_NONE);
 
-  glutKeyboardFunc(glutKeyboard);
-  glutDisplayFunc(glutDisplay);
-  glutIdleFunc(glutIdle);
+  glutCreateWindow ("Prime Sense User Tracker Viewer");  // creates a top-level window
+  //glutFullScreen();  // makes window full screen
+  glutSetCursor(GLUT_CURSOR_NONE);  // changes the cursor image of the current window to invisible
+  glutKeyboardFunc(glutKeyboard);  // sets the keyboard callback for the current window
+  glutDisplayFunc(glutDisplay); // sets the display callback function for the current window
+  glutIdleFunc(glutIdle);  // sets the global idle callback
 
-  glDisable(GL_DEPTH_TEST);
-  glEnable(GL_TEXTURE_2D);
-
-  glEnableClientState(GL_VERTEX_ARRAY);
-  glDisableClientState(GL_COLOR_ARRAY);
+  glDisable(GL_DEPTH_TEST);  // disable depth comparisons and do not update the depth buffer
+  glEnable(GL_TEXTURE_2D);  // enable 2D shading
+  glEnableClientState(GL_VERTEX_ARRAY);  // enable the vertex array is enabled for writing and used during rendering
+  glDisableClientState(GL_COLOR_ARRAY);  // disable color arrays
 }
-
 
 //#define SAMPLE_XML_PATH "/home/garratt/ros/kinect/ni/openni/lib/SamplesConfig.xml"
 
+// NEEDS COMMENT
+// this is a macro and needs the backslashes at the end of the line
+#define CHECK_RC(nRetVal, what)					 \					
+if (nRetVal != XN_STATUS_OK)					 \	
+  {								 \					
+    printf("%s failed: %s\n", what, xnGetStatusString(nRetVal)); \
+    return nRetVal;						 \						
+  }
 
-#define CHECK_RC(nRetVal, what)						\
-  if (nRetVal != XN_STATUS_OK)						\
-    {									\
-      printf("%s failed: %s\n", what, xnGetStatusString(nRetVal));	\
-      return nRetVal;							\
-    }
 
-
-
-///////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////// MAIN ///////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////
+//---------------------------------------------------------------------------
+// MAIN
+//---------------------------------------------------------------------------
 
 int main(int argc, char **argv)
 {
-  sleep(10);
-  ros::init(argc, argv, "skel_tracker");
-  ros::NodeHandle nh_;
+  sleep(10);  // pause for 10 seconds to let openni_camera startup
+
+  ros::init(argc, argv, "NUTracker");  // initialize ros node, take in argc and argv from main, and name it NUTracker
+  ros::NodeHandle nh_;  // start ros node
 
   // Read the device_id parameter from the server
   int device_id;
   //   param_nh.param ("device_id", device_id, argc > 1 ? atoi (argv[1]) : 0);
 
-  //  pmap_pub = nh_.advertise<mapping_msgs::PolygonalMap> ("skeletonpmaps", 100);
-  //  skel_pub = nh_.advertise<body_msgs::Skeletons> ("skeletons", 100);
+  // create ros publishers for the PolygonalMaps and Skeletons data and set to publish every 100 ms
+  pmap_pub = nh_.advertise<mapping_msgs::PolygonalMap> ("skeletonpmaps", 100);
+  skel_pub = nh_.advertise<body_msgs::Skeletons> ("skeletons", 100);
+
   XnStatus nRetVal = XN_STATUS_OK;
 
+  // check if config file name was specified in command line argument use specified config file if it was
   if (argc > 1)
     {
       nRetVal = g_Context.Init();
       CHECK_RC(nRetVal, "Init");
-      nRetVal = g_Context.OpenFileRecording(argv[1]);
+      nRetVal = g_Context.OpenFileRecording(argv[1]);  // open config file
 
+      // check returned value from OpenFileRecording and print error if not OK
       if (nRetVal != XN_STATUS_OK)
 	{
 	  printf("Can't open recording %s: %s\n", argv[1], xnGetStatusString(nRetVal));
-
 	  return 1;
 	}
     }
 
+  // if no file name was specified in command line use default config
   else
     {
-
-      std::string configFilename = ros::package::getPath("openni") + "/lib/SamplesConfig.xml";
+      std::string configFilename = ros::package::getPath("openni") + "/lib/SamplesConfig.xml";  // find default config file in openni package path
       nRetVal = g_Context.InitFromXmlFile(configFilename.c_str());
       CHECK_RC(nRetVal, "InitFromXml");
     }
 
   nRetVal = g_Context.FindExistingNode(XN_NODE_TYPE_DEPTH, g_DepthGenerator);
   CHECK_RC(nRetVal, "Find depth generator");
-  nRetVal = g_Context.FindExistingNode(XN_NODE_TYPE_USER, g_UserGenerator);
 
+  nRetVal = g_Context.FindExistingNode(XN_NODE_TYPE_USER, g_UserGenerator);
   if (nRetVal != XN_STATUS_OK)
     {
       nRetVal = g_UserGenerator.Create(g_Context);
@@ -451,10 +528,10 @@ int main(int argc, char **argv)
 
   XnCallbackHandle hUserCallbacks, hCalibrationCallbacks, hPoseCallbacks;
 
+  // check if user generator is supported
   if (!g_UserGenerator.IsCapabilitySupported(XN_CAPABILITY_SKELETON))
     {
       printf("Supplied user generator doesn't support skeleton\n");
-
       return 1;
     }
 
@@ -464,14 +541,11 @@ int main(int argc, char **argv)
   if (g_UserGenerator.GetSkeletonCap().NeedPoseForCalibration())
     {
       g_bNeedPose = TRUE;
-
       if (!g_UserGenerator.IsCapabilitySupported(XN_CAPABILITY_POSE_DETECTION))
 	{
 	  printf("Pose required, but not supported\n");
-
 	  return 1;
 	}
-
       g_UserGenerator.GetPoseDetectionCap().RegisterToPoseCallbacks(UserPose_PoseDetected, NULL, NULL, hPoseCallbacks);
       g_UserGenerator.GetSkeletonCap().GetCalibrationPose(g_strPose);
     }
@@ -481,6 +555,6 @@ int main(int argc, char **argv)
   nRetVal = g_Context.StartGeneratingAll();
   CHECK_RC(nRetVal, "StartGenerating");
 
-  glInit(&argc, argv);
-  glutMainLoop();
+  glInit(&argc, argv);  // initialize opengl and pass it the number of command line arguments and numbers
+  glutMainLoop();  // start opengl main loop and stay there forever
 }
