@@ -1,17 +1,17 @@
 <package>
-  <description brief="NUTracker">
+  <description brief="nu_skeletaltracker">
 
-     Microsoft Kinect based skeleton tracker.  Created by the LIMS Lab at Northwestern University.  Based off of work done by MIT and Willow Labs. 
+nu_skeletaltracker broadcasts the OpenNI skeleton frames using tf.  This package is based on Willow Labs skeletal_tracker package by Time Field.
 
   </description>
-  <author>John Ware</author>
+  <author>Jake Ware</author>
   <license>BSD</license>
   <review status="unreviewed" notes=""/>
-  <url>http://ros.org/wiki/Tracker</url>
-  <depend package="body_msgs"/>
+
+  <depend package="roscpp"/>
+  <depend package="roslib"/>
+  <depend package="geometry_msgs"/>
   <depend package="openni"/>
-  <depend package="mapping_msgs"/>
-
+  <depend package="kdl"/>
+  <depend package="tf"/>
 </package>
-
-
