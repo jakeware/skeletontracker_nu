@@ -1,7 +1,7 @@
 <package>
-  <description brief="nu_skeletaltracker">
+  <description brief="Track a person and publish tranform, pmap, and point data">
 
-nu_skeletaltracker broadcasts the OpenNI skeleton frames using tf.  This package is based on Willow Labs skeletal_tracker package by Time Field.
+nu_skeletaltracker broadcasts the OpenNI skeleton frames using tf.  This package is based on Willow Labs skeletal_tracker package by Time Field and the Kinect MIT packages.
 
   </description>
   <author>Jake Ware</author>
@@ -14,6 +14,6 @@ nu_skeletaltracker broadcasts the OpenNI skeleton frames using tf.  This package
   <depend package="openni"/>
   <depend package="kdl"/>
   <depend package="tf"/>
-  <depend package="body_msgs"/>
+  <depend package="nu_skeletonmsgs"/>
   <depend package="mapping_msgs"/>
 </package>
