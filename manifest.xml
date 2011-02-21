@@ -14,4 +14,6 @@ nu_skeletaltracker broadcasts the OpenNI skeleton frames using tf.  This package
   <depend package="openni"/>
   <depend package="kdl"/>
   <depend package="tf"/>
+  <depend package="body_msgs"/>
+  <depend package="mapping_msgs"/>
 </package>
