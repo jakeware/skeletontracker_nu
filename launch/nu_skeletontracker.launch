@@ -1,7 +1,7 @@
 <launch>
 
   	<!-- Launch kinect sensor with openni_camera... -->
-	<include file="$(find openni_camera)/launch/openni_kinect.launch"/>	
+	<include file="$(find openni_camera)/launch/openni_node.launch"/>	
 
 	<!-- This reduces the point cloud resolution to 320x240, for fast hand segmentation... -->
 	<node pkg="dynamic_reconfigure" type="dynparam" name="ressetter" args="set /openni_camera point_cloud_resolution 1" />
