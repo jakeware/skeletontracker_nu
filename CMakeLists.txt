@@ -30,6 +30,6 @@ find_package(OpenGL)
 #include(${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake)
 #gencfg()
 
-rosbuild_add_executable(nu_skeletontracker src/nu_skeletontracker.cpp)
+rosbuild_add_executable(skeletontracker src/skeletontracker_nu.cpp)
 
 
