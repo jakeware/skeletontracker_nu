@@ -1,5 +1,5 @@
 # ignore these files
-Makefile
+./Makefile
 
 # ignore these directories and the files in them.
 *~
