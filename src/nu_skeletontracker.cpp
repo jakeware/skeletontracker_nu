@@ -22,7 +22,7 @@
 
 #include <mapping_msgs/PolygonalMap.h>
 #include <geometry_msgs/Polygon.h>
-#include <nu_skeletonmsgs/Skeletons.h>
+#include <skeletonmsgs_nu/Skeletons.h>
 
 #include <XnOpenNI.h>
 #include <XnCodecIDs.h>
@@ -155,7 +155,7 @@ void getPolygon(XnUserID user, XnSkeletonJoint eJoint1, XnSkeletonJoint eJoint2,
 // NU Functions
 //---------------------------------------------------------------------------
 
-void getTransform(XnUserID user, XnSkeletonJoint name, string const& child_frame_id, nu_skeletonmsgs::SkeletonJoint &j) {
+void getTransform(XnUserID user, XnSkeletonJoint name, string const& child_frame_id, skeletonmsgs_nu::SkeletonJoint &j) {
   static tf::TransformBroadcaster br;
   geometry_msgs::Point position;
 
@@ -199,7 +199,7 @@ void getTransform(XnUserID user, XnSkeletonJoint name, string const& child_frame
 }
 
 
-void getData(XnUserID const& user, nu_skeletonmsgs::Skeletons &skels, std::vector<mapping_msgs::PolygonalMap> &pmaps) {
+void getData(XnUserID const& user, skeletonmsgs_nu::Skeletons &skels, std::vector<mapping_msgs::PolygonalMap> &pmaps) {
   mapping_msgs::PolygonalMap pmap;
   getPolygon(user, XN_SKEL_HEAD, XN_SKEL_NECK, pmap);
   getPolygon(user, XN_SKEL_NECK, XN_SKEL_LEFT_SHOULDER, pmap);
@@ -220,7 +220,7 @@ void getData(XnUserID const& user, nu_skeletonmsgs::Skeletons &skels, std::vecto
   getPolygon(user, XN_SKEL_LEFT_HIP, XN_SKEL_RIGHT_HIP, pmap);
   pmaps.push_back(pmap);
 
-  nu_skeletonmsgs::Skeleton skel;
+  skeletonmsgs_nu::Skeleton skel;
   skel.userid=user;
   getTransform(user, XN_SKEL_HEAD, "head", skel.head);
   getTransform(user, XN_SKEL_NECK, "neck", skel.neck);
@@ -244,7 +244,7 @@ void getData(XnUserID const& user, nu_skeletonmsgs::Skeletons &skels, std::vecto
 void publishData() {
   ros::Time tstamp=ros::Time::now();
 
-  nu_skeletonmsgs::Skeletons skels;
+  skeletonmsgs_nu::Skeletons skels;
   std::vector<mapping_msgs::PolygonalMap> pmaps;
 
   XnUserID users[15];
@@ -297,7 +297,7 @@ int main(int argc, char **argv)
 
   // define ros publishers for skels
   pmap_pub = nh_.advertise<mapping_msgs::PolygonalMap> ("skeletonpmaps", 100);
-  skel_pub = nh_.advertise<nu_skeletonmsgs::Skeletons> ("skeletons", 100);
+  skel_pub = nh_.advertise<skeletonmsgs_nu::Skeletons> ("skeletons", 100);
 
   // init from XML
   string configFilename = ros::package::getPath("nu_skeletontracker") + "/nu_skeletontracker.xml";
