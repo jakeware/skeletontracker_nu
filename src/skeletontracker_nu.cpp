@@ -287,7 +287,7 @@ int main(int argc, char **argv)
   sleep(5);  // delay for openni_camera to start
 
   // startup node
-  ros::init(argc, argv, "nu_skeletontracker");
+  ros::init(argc, argv, "skeletontracker_nu");
   ros::NodeHandle nh_;
 
   // define ros publishers for skels
