@@ -45,6 +45,7 @@ XnChar g_strPose[20] = "";
 
 ros::Publisher pmap_pub;
 ros::Publisher skel_pub;
+ros::Time tstamp, tstamp_last;
 
 
 //---------------------------------------------------------------------------
@@ -149,7 +150,7 @@ void getPolygon(XnUserID user, XnSkeletonJoint eJoint1, XnSkeletonJoint eJoint2,
 //---------------------------------------------------------------------------
 
 void getTransform(XnUserID user, XnSkeletonJoint name, string const& child_frame_id, skeletonmsgs_nu::SkeletonJoint &j) {
-  static tf::TransformBroadcaster br;
+  //tf::TransformBroadcaster br;
   geometry_msgs::Point position;
 
   XnSkeletonJointPosition joint;
@@ -188,80 +189,88 @@ void getTransform(XnUserID user, XnSkeletonJoint name, string const& child_frame
   j.transform.rotation.z = transform.getRotation().z();
   j.transform.rotation.w = transform.getRotation().w();
 
-  br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "openni_depth_optical_frame", child_frame_id));
-}
+  //br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "openni_depth_optical_frame", child_frame_id));
 
-
-void getData(XnUserID const& user, skeletonmsgs_nu::Skeletons &skels, std::vector<mapping_msgs::PolygonalMap> &pmaps) {
-  mapping_msgs::PolygonalMap pmap;
-  getPolygon(user, XN_SKEL_HEAD, XN_SKEL_NECK, pmap);
-  getPolygon(user, XN_SKEL_NECK, XN_SKEL_LEFT_SHOULDER, pmap);
-  getPolygon(user, XN_SKEL_LEFT_SHOULDER, XN_SKEL_LEFT_ELBOW, pmap);
-  getPolygon(user, XN_SKEL_LEFT_SHOULDER, XN_SKEL_RIGHT_SHOULDER, pmap);
-  getPolygon(user, XN_SKEL_LEFT_ELBOW, XN_SKEL_LEFT_HAND, pmap);
-  getPolygon(user, XN_SKEL_NECK, XN_SKEL_RIGHT_SHOULDER, pmap);
-  getPolygon(user, XN_SKEL_RIGHT_SHOULDER, XN_SKEL_RIGHT_ELBOW, pmap);
-  getPolygon(user, XN_SKEL_RIGHT_ELBOW, XN_SKEL_RIGHT_HAND, pmap);
-  getPolygon(user, XN_SKEL_LEFT_SHOULDER, XN_SKEL_TORSO, pmap);
-  getPolygon(user, XN_SKEL_RIGHT_SHOULDER, XN_SKEL_TORSO, pmap);
-  getPolygon(user, XN_SKEL_TORSO, XN_SKEL_LEFT_HIP, pmap);
-  getPolygon(user, XN_SKEL_LEFT_HIP, XN_SKEL_LEFT_KNEE, pmap);
-  getPolygon(user, XN_SKEL_LEFT_KNEE, XN_SKEL_LEFT_FOOT, pmap);
-  getPolygon(user, XN_SKEL_TORSO, XN_SKEL_RIGHT_HIP, pmap);
-  getPolygon(user, XN_SKEL_RIGHT_HIP, XN_SKEL_RIGHT_KNEE, pmap);
-  getPolygon(user, XN_SKEL_RIGHT_KNEE, XN_SKEL_RIGHT_FOOT, pmap);
-  getPolygon(user, XN_SKEL_LEFT_HIP, XN_SKEL_RIGHT_HIP, pmap);
-
-  pmaps.push_back(pmap);
-
-
-  skeletonmsgs_nu::Skeleton skel;
-  skel.userid=user;
-  getTransform(user, XN_SKEL_HEAD, "head", skel.head);
-  getTransform(user, XN_SKEL_NECK, "neck", skel.neck);
-  getTransform(user, XN_SKEL_TORSO, "torso", skel.torso);
-  getTransform(user, XN_SKEL_LEFT_SHOULDER, "left_shoulder", skel.left_shoulder);
-  getTransform(user, XN_SKEL_LEFT_ELBOW, "left_elbow", skel.left_elbow);
-  getTransform(user, XN_SKEL_LEFT_HAND, "left_hand", skel.left_hand);
-  getTransform(user, XN_SKEL_RIGHT_SHOULDER, "right_shoulder", skel.right_shoulder);
-  getTransform(user, XN_SKEL_RIGHT_ELBOW, "right_elbow", skel.right_elbow);
-  getTransform(user, XN_SKEL_RIGHT_HAND, "right_hand", skel.right_hand);
-  getTransform(user, XN_SKEL_LEFT_HIP, "left_hip", skel.left_hip);
-  getTransform(user, XN_SKEL_LEFT_KNEE, "left_knee", skel.left_knee);
-  getTransform(user, XN_SKEL_LEFT_FOOT,  "left_foot", skel.left_foot);
-  getTransform(user, XN_SKEL_RIGHT_HIP, "right_hip", skel.right_hip);
-  getTransform(user, XN_SKEL_RIGHT_KNEE, "right_knee", skel.right_knee);
-  getTransform(user, XN_SKEL_RIGHT_FOOT, "right_foot", skel.right_foot);
-
-  skels.skeletons.push_back(skel);
 }
 
  
 void publishData() {
-  ros::Time tstamp=ros::Time::now();
+  tstamp_last = tstamp;
+  tstamp=ros::Time::now();
 
+  int users_count = 0;
   skeletonmsgs_nu::Skeletons skels;
-  std::vector<mapping_msgs::PolygonalMap> pmaps;
-
+  mapping_msgs::PolygonalMap pmap;
+  
   XnUserID users[15];
-  XnUInt16 users_count = 15;
-  g_UserGenerator.GetUsers(users, users_count);
-
-  for (int i = 0; i < users_count; ++i) {
+  XnUInt16 users_max = 15;
+  g_UserGenerator.GetUsers(users, users_max);
+  
+  for (int i = 0; i < users_max; ++i) {
     XnUserID user = users[i];
-    if (!g_UserGenerator.GetSkeletonCap().IsTracking(user)) continue;
 
-    getData(user, skels, pmaps);
+    if (g_UserGenerator.GetSkeletonCap().IsTracking(user)) {
+      users_count++;
 
-    if(pmaps.size()) {
-      skels.header.stamp=tstamp;
-      skels.header.frame_id="/openni_depth_optical_frame";
-      skel_pub.publish(skels);
-      pmaps.front().header.stamp=tstamp;
-      pmaps.front().header.frame_id="/openni_depth_optical_frame";
-      pmap_pub.publish(pmaps[0]);
+      getPolygon(user, XN_SKEL_HEAD, XN_SKEL_NECK, pmap);
+      getPolygon(user, XN_SKEL_NECK, XN_SKEL_LEFT_SHOULDER, pmap);
+      getPolygon(user, XN_SKEL_LEFT_SHOULDER, XN_SKEL_LEFT_ELBOW, pmap);
+      getPolygon(user, XN_SKEL_LEFT_SHOULDER, XN_SKEL_RIGHT_SHOULDER, pmap);
+      getPolygon(user, XN_SKEL_LEFT_ELBOW, XN_SKEL_LEFT_HAND, pmap);
+      getPolygon(user, XN_SKEL_NECK, XN_SKEL_RIGHT_SHOULDER, pmap);
+      getPolygon(user, XN_SKEL_RIGHT_SHOULDER, XN_SKEL_RIGHT_ELBOW, pmap);
+      getPolygon(user, XN_SKEL_RIGHT_ELBOW, XN_SKEL_RIGHT_HAND, pmap);
+      getPolygon(user, XN_SKEL_LEFT_SHOULDER, XN_SKEL_TORSO, pmap);
+      getPolygon(user, XN_SKEL_RIGHT_SHOULDER, XN_SKEL_TORSO, pmap);
+      getPolygon(user, XN_SKEL_TORSO, XN_SKEL_LEFT_HIP, pmap);
+      getPolygon(user, XN_SKEL_LEFT_HIP, XN_SKEL_LEFT_KNEE, pmap);
+      getPolygon(user, XN_SKEL_LEFT_KNEE, XN_SKEL_LEFT_FOOT, pmap);
+      getPolygon(user, XN_SKEL_TORSO, XN_SKEL_RIGHT_HIP, pmap);
+      getPolygon(user, XN_SKEL_RIGHT_HIP, XN_SKEL_RIGHT_KNEE, pmap);
+      getPolygon(user, XN_SKEL_RIGHT_KNEE, XN_SKEL_RIGHT_FOOT, pmap);
+      getPolygon(user, XN_SKEL_LEFT_HIP, XN_SKEL_RIGHT_HIP, pmap);
+
+      pmap.header.stamp=tstamp;
+      pmap.header.frame_id="/openni_depth_optical_frame"; 
+
+      skeletonmsgs_nu::Skeleton skel;
+      skel.userid=user;
+      getTransform(user, XN_SKEL_HEAD, "head", skel.head);
+      getTransform(user, XN_SKEL_NECK, "neck", skel.neck);
+      getTransform(user, XN_SKEL_TORSO, "torso", skel.torso);
+      getTransform(user, XN_SKEL_LEFT_SHOULDER, "left_shoulder", skel.left_shoulder);
+      getTransform(user, XN_SKEL_LEFT_ELBOW, "left_elbow", skel.left_elbow);
+      getTransform(user, XN_SKEL_LEFT_HAND, "left_hand", skel.left_hand);
+      getTransform(user, XN_SKEL_RIGHT_SHOULDER, "right_shoulder", skel.right_shoulder);
+      getTransform(user, XN_SKEL_RIGHT_ELBOW, "right_elbow", skel.right_elbow);
+      getTransform(user, XN_SKEL_RIGHT_HAND, "right_hand", skel.right_hand);
+      getTransform(user, XN_SKEL_LEFT_HIP, "left_hip", skel.left_hip);
+      getTransform(user, XN_SKEL_LEFT_KNEE, "left_knee", skel.left_knee);
+      getTransform(user, XN_SKEL_LEFT_FOOT,  "left_foot", skel.left_foot);
+      getTransform(user, XN_SKEL_RIGHT_HIP, "right_hip", skel.right_hip);
+      getTransform(user, XN_SKEL_RIGHT_KNEE, "right_knee", skel.right_knee);
+      getTransform(user, XN_SKEL_RIGHT_FOOT, "right_foot", skel.right_foot);
+      
+      skels.skeletons.push_back(skel); 
     }
   }
+  
+  ROS_DEBUG("users_count: %i", users_count);
+  
+  if(users_count > 0) {
+    skels.header.stamp=tstamp;
+    skels.header.frame_id="/openni_depth_optical_frame";
+    skel_pub.publish(skels);
+    
+    pmap_pub.publish(pmap);
+  }
+}
+
+
+void timerCallback(const ros::TimerEvent& e) {
+  ROS_DEBUG("timerCallback triggered");
+  g_Context.WaitAndUpdateAll();  // sits and waits for new set of user data from kinect (30 Hz)
+  publishData();  // everything important happens in this function
 }
 
 
@@ -341,13 +350,20 @@ int main(int argc, char **argv)
   nRetVal = g_Context.StartGeneratingAll();
   CHECK_RC(nRetVal, "StartGenerating");
 
+  ROS_INFO("Starting Tracker...\n");
+
+  ros::Timer timer = nh_.createTimer(ros::Duration(0.01), timerCallback);
+  ros::spin();
+
+  /*
   // define loop frequency and enter ros loop
   ros::Rate r(30);
   while (ros::ok()) {
-    g_Context.WaitAndUpdateAll();
+    g_Context.WaitAndUpdateAll();  // sits and waits for new set of user data from kinect (30 Hz)
     publishData();  // everything important happens in this function
-    r.sleep();
+    r.sleep();  // waits the necessary amount of time to ensure loop rate of Rate r (no waiting if r > 30)
   }
+  */
 
   g_Context.Shutdown();
   return 0;
