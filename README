@@ -1,0 +1,177 @@
+Jarvis Schultz
+October 19, 2011
+skeletontracker_nu ROS package
+
+Source Repository: https://github.com/jakeware/skeletontracker_nu
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% BASIC INFO %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+This ROS package essentially provides wrapper functions and launch
+files that facilitate easy skeleton tracking and recording using the
+Kinect and the NITE SDK.  To run it you must have ROS installed
+(currently this package works with electric, but diamondback should
+work as well.)  This package additionally depends on the
+skeletonmsgs_nu package available at
+https://github.com/jakeware/skeletonmsgs_nu and the
+motion_planning_common ROS stack available at www.ros.org
+
+The main source code contained in ./src/skeletontracker_nu.cpp
+essentially implements the skeleton tracking functions of NITE, and
+publishes the tracking data as both tf topics and as a topic called
+/skeletons and /skeletonpmaps.  The tf topic contains transformation
+data from the Kinect's coordinate systems out to the coordinate system
+located at each joint of a user being tracked.  The /skeleton topic
+contains the x,y,z position of each joint of each user as a custom
+message type defined in the skeletonmsgs_nu package.  The
+/skeletonpmaps topic publishes the skeleton tracking data in the form
+of a "polygonal map" defined in the mapping_msgs ROS package (part of
+the motion_planning_common stack).  This topic is simply for viewing
+the wireframe skeleton representation in rviz.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% OPERATION INFORMATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+1.  The launch file record_skeletons.launch provides a very convenient
+way of starting up the entire system it can be ran one of two ways:
+	"roslaunch skeletontracker_nu record_skeletons.launch"
+or simply execute the shell script provided to start up the system. First cd 
+into the directory containing the script (or add it to your system's path) 
+then run
+	"./start_system.sh"
+
+This launch file does several important things; first it starts the
+Kinect driver and sets its output to print to its own xterm window,
+then it starts the skeleton tracker and sets its output to a new xterm
+window.  Both of these nodes are set to respawn, so if you close one
+of the xterm windows they will automatically restart.  To shutdown the
+entire system, press "CTRL+c" in the terminal that executed the launch
+file.  The launch file also starts up the ROS visualizing tool rviz
+with settings that should be fairly appropriate for viewing the
+skeleton tracking data.  These settings are stored in
+./launch/skeletonrecord.vcg Note that the launch file or the vcg file
+can be modified to change the way rviz starts.  In other words, you
+can create new settings in rviz and then export them as a new vcg
+file, and either overwrite the current vcg so that launch file starts
+rviz with your new settings, or change the launch file to refer to the
+new vcg.  rviz is not a respawning process, so if the launch file is
+used to start the system, and rviz is no longer needed, it can simply
+be closed.  If you wanted to restart rviz alone, simply run
+	"rosrun rviz rviz"
+in a terminal.
+
+
+
+
+2.  Note that both included shell scripts (record_skeletons.sh and
+start_system.sh) must be executable, if they are not on your system, 
+simply run 
+	"chmod a+x record_skeletons.sh start_system.sh"
+in the main directory of the package.
+
+
+
+
+3.  The record_skeletons.sh script provides a convenient way of
+recording data.  Once the system is started up, get the system
+tracking the desired user, and then to begin recording, in a terminal
+execute
+	"./record_skeletons.sh [filename]"
+
+If no filename is provided, all recording will be done under the name
+"default". On-screen directions will guide you through the rest of the
+recording process.
+
+Let's say we execute "./record_skeletons.sh temp" then this script
+will check for *.bag and *.txt files with the name temp.  So that they
+don't get overwritten, they are automatically moved to new files
+called "temp_backup_1.*".  The script then "subscribes" waits for the
+user to press a button before beginning to record.  Once recording is
+started script "subscribes" to the /skeletons topic and begins saving
+it in a special encrypted and compressed filetype called a "bag" file.
+The script then waits for the user to press another button to end
+recording.  Once recording is done, the bag file "temp.bag" is closed,
+and the data is exported to a csv file called "temp.txt".  This file
+is then easily read in MATLAB or whatever you wish.
+
+
+
+
+4.  Coordinate System Information: If you look at one of the exported
+csv files, you'll notice the value in the column titled
+"field.header.frame_id" is always "openni_depth_optical_frame".  This
+is the coordinate system that the rest of the data is expressed in.
+This frame is located at the center of the lense of the Kinect's depth
+camera.  It's z-axis is normal to the lense surface and pointing
+outwards from the Kinect.  In other words, the z-axis points outward
+in the same direction that the Kinect is looking.  The y-axis is
+pointed downwards through the base of the Kinect, and the x-axis is
+obviously normal to both of the other two.  This coordinate system
+complies with ROS standards.  More information can be found at
+http://www.ros.org/reps/rep-0103.html
+
+The translation and rotation data associated with each joint also
+follows ROS convention.  Thus the XYZ location of a given joint
+coordinate system provides a vector from the
+"openni_depth_optical_frame" to the joint expressed in the
+"openni_depth_optical_frame".  The rotation information is represented
+as a quaternion and its direction is such that it will transform the
+"openni_depth_optical_frame" into the joint frame.  This is the same
+transformation that would transform data expressed in the joint
+coordinate system into the "openni_depth_optical_frame" coordinate
+system.  More information can be found at 
+http://www.ros.org/wiki/geometry/CoordinateFrameConventions
+
+
+
+
+5.  Note that the record_skeletons.sh script really just calls a ROS
+command line tool called rosbag.  If the user was interested in saving
+more data than just the /skeletons topic they could either edit the
+script, or manually use rosbag.  This could be useful, for example, if
+it was desirable to store the raw RGB camera data or the raw point
+cloud data of Kinect.  
+
+Another useful command line tool is rxbag.  rxbag is a gui that
+provides a very quick and easy way to plot and view data stored in a
+bag file.  It can play back saved camera data as a movie, plot
+individual parameters, save plots, and more.  More info at 
+http://www.ros.org/wiki/rxbag and 
+http://www.ros.org/wiki/rosbag
+
+
+
+
+6.  On my system, I sometimes have get an error that can easily be
+fixed.  It seems the error happens when either letting the Kinect run
+for a really long time without doing anything with the data, or
+starting and stopping the drivers a lot.  The issue is that even
+though the Kinect is running and properly transmitting its data to the
+computer (i.e. skelton tracking would still work), certain parts of
+the ROS world fail to "see" the topics that the Kinect drivers are
+publishing.  For example, the skeleton tracking will be working, but
+the point cloud won't be visible in rviz.  This is quite simple to fix.
+Unplug the Kinect from the wall and the computer, and then run 
+       "sudo service udev reload"
+
+in a terminal to reload the USB dynamic device management module
+within the linux kernel.  Then plug the Kinect back in and see if
+things are any better.  
+
+
+
+7.  At any point in time, if you are interested in seeing how often or
+what topics exist in the ROS world, the command line tool rostopic may
+be very useful.  Examples:
+   "rostopic list"
+   "rostopic hz /camera/rgb/points"
+
+More info at www.ros.org/wiki/rostopic
+
+
+
+8.  The ROS site is full of tons of useful information.  If you are
+stuck on something, or would like to do something that is not covered
+in this README, I suggest checking that site first.
