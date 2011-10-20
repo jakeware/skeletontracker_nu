@@ -94,7 +94,8 @@ it in a special encrypted and compressed filetype called a "bag" file.
 The script then waits for the user to press another button to end
 recording.  Once recording is done, the bag file "temp.bag" is closed,
 and the data is exported to a csv file called "temp.txt".  This file
-is then easily read in MATLAB or whatever you wish.
+is then easily read in MATLAB or whatever you wish.  NOTE: the times
+that are recorded in this text file are in nanoseconds.  
 
 
 
