@@ -15,5 +15,6 @@
   <depend package="kdl"/>
   <depend package="tf"/>
   <depend package="skeletonmsgs_nu"/>
-  <depend package="mapping_msgs"/>
+  <depend package="arm_navigation_msgs"/>
+  <depend package="mapping_msgs" />
 </package>
