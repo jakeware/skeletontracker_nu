@@ -18,7 +18,7 @@
 #include <tf/transform_broadcaster.h>
 #include <kdl/frames.hpp>
 
-#include <skeletonmsgs_nu/PolygonalMap.h>
+#include <mapping_msgs/PolygonalMap.h>
 #include <geometry_msgs/Polygon.h>
 #include <skeletonmsgs_nu/Skeletons.h>
 
@@ -142,7 +142,7 @@ geometry_msgs::Point32 vecToPt3(XnVector3D pt)
 
 
 void getPolygon(XnUserID user, XnSkeletonJoint eJoint1,
-		XnSkeletonJoint eJoint2, skeletonmsgs_nu::PolygonalMap &pmap)
+		XnSkeletonJoint eJoint2, mapping_msgs::PolygonalMap &pmap)
 {
     XnSkeletonJointPosition joint1, joint2;
     g_UserGenerator.GetSkeletonCap().GetSkeletonJointPosition(user,
@@ -225,7 +225,7 @@ void publishData(tf::TransformBroadcaster br)
 
     int users_count = 0;
     skeletonmsgs_nu::Skeletons skels;
-    skeletonmsgs_nu::PolygonalMap pmap;
+    mapping_msgs::PolygonalMap pmap;
   
     XnUserID users[15];
     XnUInt16 users_max = 15;
@@ -341,7 +341,7 @@ int main(int argc, char **argv)
     ros::NodeHandle nh_;
 
     // define ros publishers for skels
-    pmap_pub = nh_.advertise<skeletonmsgs_nu::PolygonalMap> ("skeletonpmaps", 100);
+    pmap_pub = nh_.advertise<mapping_msgs::PolygonalMap> ("skeletonpmaps", 100);
     skel_pub = nh_.advertise<skeletonmsgs_nu::Skeletons> ("skeletons", 100);
     // tf::TransformBroadcaster br;
 
