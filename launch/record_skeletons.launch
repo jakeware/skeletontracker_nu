@@ -22,12 +22,15 @@
   </node>
   <include file="$(find openni_camera)/launch/kinect_frames.launch"/>
 
-
-
   <!-- Launch skeleton tracking node with output in a new window -->
   <node pkg="skeletontracker_nu" type="skeletontracker" name="skeletontracker"  output="screen" respawn="true" launch-prefix="xterm -rv -e"/>
 	
   <!-- Launch rviz with a nice configuration -->
   <node pkg="rviz" type="rviz" name="rviz" respawn="false" args="-d $(find skeletontracker_nu)/launch/skeletonrecord.vcg"/>
+
+  <!-- Include the launch file for the static transform broadcaster that aligns my kinect with gravity -->
+  <include file="$(find objecttracker_nu)/launch/optimization_frame_broadcaster.launch"/>
+  <node pkg="tf" type="static_transform_publisher" name="world_frame_broadcaster"
+	args="0 -1 0 -.7071 0 0 .7071 oriented_optimization_frame trep_world_frame 10"/>
 	
 </launch>

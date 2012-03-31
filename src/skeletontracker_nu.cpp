@@ -16,6 +16,8 @@
 #include <ros/package.h>
 
 #include <tf/transform_broadcaster.h>
+#include <tf/transform_listener.h>
+#include <tf/transform_datatypes.h>
 #include <kdl/frames.hpp>
 
 #include <mapping_msgs/PolygonalMap.h>
@@ -27,28 +29,30 @@
 #include <XnCppWrapper.h>
 
 #include <math.h>
+// using std::string;
+
+// this is a macro and needs the backslashes at the end of the line
+#define CHECK_RC(nRetVal, what)						\
+    if (nRetVal != XN_STATUS_OK)					\
+    {									\
+	printf("%s failed: %s\n", what, xnGetStatusString(nRetVal));	\
+	return nRetVal;							\
+    }
 
 //---------------------------------------------------------------------------
-// Global Variables
+// Global variables
 //---------------------------------------------------------------------------
-
-using std::string;
-
 xn::Context        g_Context;  
 xn::DepthGenerator g_DepthGenerator;  
-xn::UserGenerator  g_UserGenerator;  
+xn::UserGenerator  g_UserGenerator;
+    
+XnBool g_bNeedPose = false;  
+XnChar g_strPose[20]; 
 
-XnBool g_bNeedPose   = false;  
-XnChar g_strPose[20] = ""; 
-
-ros::Publisher pmap_pub;
-ros::Publisher skel_pub;
-ros::Time tstamp, tstamp_last;
 
 //---------------------------------------------------------------------------
-// NITE Functions
+// Classes and Globals
 //---------------------------------------------------------------------------
-
 // Callback: New user was detected mit and ros used slightly different
 // versions of this function by eliminating different if/else
 // components
@@ -113,8 +117,7 @@ void XN_CALLBACK_TYPE UserPose_PoseDetected(
     g_UserGenerator.GetPoseDetectionCap().StopPoseDetection(nId);
     g_UserGenerator.GetSkeletonCap().RequestCalibration(nId, TRUE); 
 }
-
-
+ 
 //---------------------------------------------------------------------------
 // MIT Functions
 //---------------------------------------------------------------------------
@@ -159,174 +162,243 @@ void getPolygon(XnUserID user, XnSkeletonJoint eJoint1,
     pmap.polygons.push_back(p);
 }
 
+
+class TrackerClass{
+
+
+private:
+    ros::NodeHandle nh_;
+    // xn::Context        g_Context;  
+    // xn::DepthGenerator g_DepthGenerator;  
+    // xn::UserGenerator  g_UserGenerator;  
+
+    // XnBool g_bNeedPose;  
+    // XnChar g_strPose[20]; 
+
+    ros::Publisher pmap_pub;
+    ros::Publisher skel_pub;
+    ros::Time tstamp, tstamp_last;
+    tf::TransformBroadcaster br;
+    tf::TransformListener listener;
+    ros::Timer timer;
+
+public:
+    TrackerClass(){
+	
+	// define ros publishers for skels
+	pmap_pub = nh_.advertise<mapping_msgs::PolygonalMap> ("skeletonpmaps", 100);
+	skel_pub = nh_.advertise<skeletonmsgs_nu::Skeletons> ("skeletons", 100);
+	timer = nh_.createTimer(ros::Duration(0.01), &TrackerClass::timerCallback, this);
+
+	ROS_INFO("Starting Tracker...\n");
+    }
+
 //---------------------------------------------------------------------------
 // NU Functions
 //---------------------------------------------------------------------------
 
-void getTransform(XnUserID user, XnSkeletonJoint name,
-		  string const& child_frame_id,
-		  skeletonmsgs_nu::SkeletonJoint &j,
-		  tf::TransformBroadcaster br)
-{
-    geometry_msgs::Point position;
+    void getTransform(XnUserID user, XnSkeletonJoint name,
+		      std::string const& child_frame_id,
+		      skeletonmsgs_nu::SkeletonJoint &j)
+	{
+	    geometry_msgs::Point position;
 
-    XnSkeletonJointPosition joint;
-    g_UserGenerator.GetSkeletonCap().GetSkeletonJointPosition(user,
-							      name,
-							      joint);
-    position = vecToPt(joint.position);
-    j.confidence = joint.fConfidence;
+	    XnSkeletonJointPosition joint;
+	    g_UserGenerator.GetSkeletonCap().GetSkeletonJointPosition(user,
+								      name,
+								      joint);
+	    position = vecToPt(joint.position);
+	    j.confidence = joint.fConfidence;
 
-    XnSkeletonJointOrientation joint_orientation;
-    g_UserGenerator.GetSkeletonCap().GetSkeletonJointOrientation(
-	user, name, joint_orientation);
+	    XnSkeletonJointOrientation joint_orientation;
+	    g_UserGenerator.GetSkeletonCap().GetSkeletonJointOrientation(
+		user, name, joint_orientation);
 
-    XnFloat* m = joint_orientation.orientation.elements;
-    m[0] = -m[0];
-    m[1] = -m[1];
-    m[2] = -m[2];
-    m[6] = -m[6];
-    m[7] = -m[7];
-    m[8] = -m[8];
+	    XnFloat* m = joint_orientation.orientation.elements;
+	    m[0] = -m[0];
+	    m[1] = -m[1];
+	    m[2] = -m[2];
+	    m[6] = -m[6];
+	    m[7] = -m[7];
+	    m[8] = -m[8];
     
-    KDL::Rotation rotation(m[0], m[1], m[2],
-			   m[3], m[4], m[5],
-			   m[6], m[7], m[8]);
+	    KDL::Rotation rotation(m[0], m[1], m[2],
+				   m[3], m[4], m[5],
+				   m[6], m[7], m[8]);
 
-    double qx, qy, qz, qw;
-    rotation.GetQuaternion(qx, qy, qz, qw);
+	    double qx, qy, qz, qw;
+	    rotation.GetQuaternion(qx, qy, qz, qw);
 
-    tf::Transform transform;
-    transform.setOrigin(tf::Vector3(position.x, position.y, position.z));
-    transform.setRotation(tf::Quaternion(qx, qy, qz, qw));
+	    // publish the tf data
+	    tf::Transform transform;
+	    tf::StampedTransform t_wj;
+	    ros::Time t;
+	    t = ros::Time::now();
+	    transform.setOrigin(tf::Vector3(position.x, position.y, position.z));
+	    transform.setRotation(tf::Quaternion(qx, qy, qz, qw));
+	    br.sendTransform(tf::StampedTransform(
+				 transform,
+				 t,
+				 "openni_depth_optical_frame",
+				 child_frame_id));
 
-    j.transform.translation.x = transform.getOrigin().x();
-    j.transform.translation.y = transform.getOrigin().y();
-    j.transform.translation.z = transform.getOrigin().z();
+	    std::string err;
+	    listener.waitForTransform(child_frame_id,
+				 "trep_world_frame",
+				 t,
+				 ros::Duration(5),
+				 ros::Duration(0.001),
+				 &err);				 
+				 
+	    try {
+		listener.lookupTransform(child_frame_id, "trep_world_frame",
+					 t, t_wj);
+	    }
+	    catch (tf::TransformException ex) {
+		ROS_WARN("%s",ex.what());
+	    }
+	    
+	    // fill out the joint data
+	    j.transform.translation.x = t_wj.getOrigin().x();
+	    j.transform.translation.y = t_wj.getOrigin().y();
+	    j.transform.translation.z = t_wj.getOrigin().z();
   
-    j.transform.rotation.x = transform.getRotation().x();
-    j.transform.rotation.y = transform.getRotation().y();
-    j.transform.rotation.z = transform.getRotation().z();
-    j.transform.rotation.w = transform.getRotation().w();
+	    j.transform.rotation.x = t_wj.getRotation().x();
+	    j.transform.rotation.y = t_wj.getRotation().y();
+	    j.transform.rotation.z = t_wj.getRotation().z();
+	    j.transform.rotation.w = t_wj.getRotation().w();
 
-    br.sendTransform(tf::StampedTransform(
-			 transform,
-			 ros::Time::now(),
-			 "openni_depth_optical_frame",
-			 child_frame_id));
-    return;
-}
+	    return;
+	}
+	    // get a transform from the joint to trep world frame
+	    // geometry_msgs::QuaternionStamped quat, tquat;
+	    // tf::quaternionTFToMsg(tf::Quaternion(qx,qy,qz,qw), quat.quaternion, lt);
+	    // quat.header.stamp = t;
+	    // quat.header.frame_id = child_frame_id;
+	    // try {listener.transformQuaternion("/trep_world_frame", quat, tquat);}
+	    // catch(tf::TransformException& ex){
+	    // 	ROS_WARN("Failed to transform quaternion: %s", ex.what());
+	    // }
+	    // geometry_msgs::Vector3Stamped p, tp;
+	    // p.vector.x = position.x; p.vector.y = position.y; p.vector.z = position.z;
+	    // // p.header = quat.header;
+
+	    // p.header.stamp = t;
+	    // p.header.frame_id = child_frame_id;
+
+	    // try {listener.transformVector("/trep_world_frame", t, p,
+	    // 				  "/openni_depth_optical_frame", tp);}
+	    // catch(tf::TransformException& ex){
+	    // 	ROS_WARN("Failed to transform vector: %s", ex.what());
+	    // }    
+	    // // fill out the joint data
+	    // j.transform.translation.x = tp.vector.x;
+	    // j.transform.translation.y = tp.vector.y;
+	    // j.transform.translation.z = tp.vector.z;
+  
+	    // j.transform.rotation.x = tquat.quaternion.x;
+	    // j.transform.rotation.y = tquat.quaternion.y;
+	    // j.transform.rotation.z = tquat.quaternion.z;
+	    // j.transform.rotation.w = tquat.quaternion.w;
 
  
-void publishData(tf::TransformBroadcaster br)
-{
-    tstamp_last = tstamp;
-    tstamp=ros::Time::now();
+    void publishData(void)
+	{
+	    tstamp_last = tstamp;
+	    tstamp=ros::Time::now();
 
-    int users_count = 0;
-    skeletonmsgs_nu::Skeletons skels;
-    mapping_msgs::PolygonalMap pmap;
+	    int users_count = 0;
+	    skeletonmsgs_nu::Skeletons skels;
+	    mapping_msgs::PolygonalMap pmap;
   
-    XnUserID users[15];
-    XnUInt16 users_max = 15;
-    g_UserGenerator.GetUsers(users, users_max);
+	    XnUserID users[15];
+	    XnUInt16 users_max = 15;
+	    g_UserGenerator.GetUsers(users, users_max);
   
-    for (int i = 0; i < users_max; ++i) {
-	XnUserID user = users[i];
+	    for (int i = 0; i < users_max; ++i) {
+		XnUserID user = users[i];
 
-	if (g_UserGenerator.GetSkeletonCap().IsTracking(user)) {
-	    users_count++;
+		if (g_UserGenerator.GetSkeletonCap().IsTracking(user)) {
+		    users_count++;
 
-	    getPolygon(user, XN_SKEL_HEAD, XN_SKEL_NECK, pmap);
-	    getPolygon(user, XN_SKEL_NECK, XN_SKEL_LEFT_SHOULDER, pmap);
-	    getPolygon(user, XN_SKEL_LEFT_SHOULDER, XN_SKEL_LEFT_ELBOW, pmap);
-	    getPolygon(user, XN_SKEL_LEFT_SHOULDER, XN_SKEL_RIGHT_SHOULDER, pmap);
-	    getPolygon(user, XN_SKEL_LEFT_ELBOW, XN_SKEL_LEFT_HAND, pmap);
-	    getPolygon(user, XN_SKEL_NECK, XN_SKEL_RIGHT_SHOULDER, pmap);
-	    getPolygon(user, XN_SKEL_RIGHT_SHOULDER, XN_SKEL_RIGHT_ELBOW, pmap);
-	    getPolygon(user, XN_SKEL_RIGHT_ELBOW, XN_SKEL_RIGHT_HAND, pmap);
-	    getPolygon(user, XN_SKEL_LEFT_SHOULDER, XN_SKEL_TORSO, pmap);
-	    getPolygon(user, XN_SKEL_RIGHT_SHOULDER, XN_SKEL_TORSO, pmap);
-	    getPolygon(user, XN_SKEL_TORSO, XN_SKEL_LEFT_HIP, pmap);
-	    getPolygon(user, XN_SKEL_LEFT_HIP, XN_SKEL_LEFT_KNEE, pmap);
-	    getPolygon(user, XN_SKEL_LEFT_KNEE, XN_SKEL_LEFT_FOOT, pmap);
-	    getPolygon(user, XN_SKEL_TORSO, XN_SKEL_RIGHT_HIP, pmap);
-	    getPolygon(user, XN_SKEL_RIGHT_HIP, XN_SKEL_RIGHT_KNEE, pmap);
-	    getPolygon(user, XN_SKEL_RIGHT_KNEE, XN_SKEL_RIGHT_FOOT, pmap);
-	    getPolygon(user, XN_SKEL_LEFT_HIP, XN_SKEL_RIGHT_HIP, pmap);
+		    getPolygon(user, XN_SKEL_HEAD, XN_SKEL_NECK, pmap);
+		    getPolygon(user, XN_SKEL_NECK, XN_SKEL_LEFT_SHOULDER, pmap);
+		    getPolygon(user, XN_SKEL_LEFT_SHOULDER, XN_SKEL_LEFT_ELBOW, pmap);
+		    getPolygon(user, XN_SKEL_LEFT_SHOULDER, XN_SKEL_RIGHT_SHOULDER, pmap);
+		    getPolygon(user, XN_SKEL_LEFT_ELBOW, XN_SKEL_LEFT_HAND, pmap);
+		    getPolygon(user, XN_SKEL_NECK, XN_SKEL_RIGHT_SHOULDER, pmap);
+		    getPolygon(user, XN_SKEL_RIGHT_SHOULDER, XN_SKEL_RIGHT_ELBOW, pmap);
+		    getPolygon(user, XN_SKEL_RIGHT_ELBOW, XN_SKEL_RIGHT_HAND, pmap);
+		    getPolygon(user, XN_SKEL_LEFT_SHOULDER, XN_SKEL_TORSO, pmap);
+		    getPolygon(user, XN_SKEL_RIGHT_SHOULDER, XN_SKEL_TORSO, pmap);
+		    getPolygon(user, XN_SKEL_TORSO, XN_SKEL_LEFT_HIP, pmap);
+		    getPolygon(user, XN_SKEL_LEFT_HIP, XN_SKEL_LEFT_KNEE, pmap);
+		    getPolygon(user, XN_SKEL_LEFT_KNEE, XN_SKEL_LEFT_FOOT, pmap);
+		    getPolygon(user, XN_SKEL_TORSO, XN_SKEL_RIGHT_HIP, pmap);
+		    getPolygon(user, XN_SKEL_RIGHT_HIP, XN_SKEL_RIGHT_KNEE, pmap);
+		    getPolygon(user, XN_SKEL_RIGHT_KNEE, XN_SKEL_RIGHT_FOOT, pmap);
+		    getPolygon(user, XN_SKEL_LEFT_HIP, XN_SKEL_RIGHT_HIP, pmap);
 
-	    pmap.header.stamp=tstamp;
-	    pmap.header.frame_id="/openni_depth_optical_frame"; 
+		    pmap.header.stamp=tstamp;
+		    pmap.header.frame_id="/openni_depth_optical_frame"; 
 
-	    skeletonmsgs_nu::Skeleton skel;
-	    skel.userid=user;
-	    getTransform(user, XN_SKEL_HEAD, "head", skel.head, br);
-	    getTransform(user, XN_SKEL_NECK, "neck", skel.neck, br);
-	    getTransform(user, XN_SKEL_TORSO, "torso", skel.torso, br);
-	    getTransform(user, XN_SKEL_LEFT_SHOULDER, "left_shoulder",
-			 skel.left_shoulder, br);
-	    getTransform(user, XN_SKEL_LEFT_ELBOW, "left_elbow",
-			 skel.left_elbow, br);
-	    getTransform(user, XN_SKEL_LEFT_HAND, "left_hand",
-			 skel.left_hand, br);
-	    getTransform(user, XN_SKEL_RIGHT_SHOULDER, "right_shoulder",
-			 skel.right_shoulder, br);
-	    getTransform(user, XN_SKEL_RIGHT_ELBOW, "right_elbow",
-			 skel.right_elbow, br);
-	    getTransform(user, XN_SKEL_RIGHT_HAND, "right_hand",
-			 skel.right_hand, br);
-	    getTransform(user, XN_SKEL_LEFT_HIP, "left_hip",
-			 skel.left_hip, br);
-	    getTransform(user, XN_SKEL_LEFT_KNEE, "left_knee",
-			 skel.left_knee, br);
-	    getTransform(user, XN_SKEL_LEFT_FOOT,  "left_foot",
-			 skel.left_foot, br);
-	    getTransform(user, XN_SKEL_RIGHT_HIP, "right_hip",
-			 skel.right_hip, br);
-	    getTransform(user, XN_SKEL_RIGHT_KNEE, "right_knee",
-			 skel.right_knee, br);
-	    getTransform(user, XN_SKEL_RIGHT_FOOT, "right_foot",
-			 skel.right_foot, br);
+		    skeletonmsgs_nu::Skeleton skel;
+		    skel.userid=user;
+		    getTransform(user, XN_SKEL_HEAD, "head", skel.head);
+		    getTransform(user, XN_SKEL_NECK, "neck", skel.neck);
+		    getTransform(user, XN_SKEL_TORSO, "torso", skel.torso);
+		    getTransform(user, XN_SKEL_LEFT_SHOULDER, "left_shoulder",
+				 skel.left_shoulder);
+		    getTransform(user, XN_SKEL_LEFT_ELBOW, "left_elbow",
+				 skel.left_elbow);
+		    getTransform(user, XN_SKEL_LEFT_HAND, "left_hand",
+				 skel.left_hand);
+		    getTransform(user, XN_SKEL_RIGHT_SHOULDER, "right_shoulder",
+				 skel.right_shoulder);
+		    getTransform(user, XN_SKEL_RIGHT_ELBOW, "right_elbow",
+				 skel.right_elbow);
+		    getTransform(user, XN_SKEL_RIGHT_HAND, "right_hand",
+				 skel.right_hand);
+		    getTransform(user, XN_SKEL_LEFT_HIP, "left_hip",
+				 skel.left_hip);
+		    getTransform(user, XN_SKEL_LEFT_KNEE, "left_knee",
+				 skel.left_knee);
+		    getTransform(user, XN_SKEL_LEFT_FOOT,  "left_foot",
+				 skel.left_foot);
+		    getTransform(user, XN_SKEL_RIGHT_HIP, "right_hip",
+				 skel.right_hip);
+		    getTransform(user, XN_SKEL_RIGHT_KNEE, "right_knee",
+				 skel.right_knee);
+		    getTransform(user, XN_SKEL_RIGHT_FOOT, "right_foot",
+				 skel.right_foot);
       
-	    skels.skeletons.push_back(skel); 
-	}
-    }
+		    skels.skeletons.push_back(skel); 
+		}
+	    }
   
-    ROS_DEBUG("users_count: %i", users_count);
+	    ROS_DEBUG("users_count: %i", users_count);
   
-    if(users_count > 0)
-    {
-	skels.header.stamp=tstamp;
-	skels.header.frame_id="/openni_depth_optical_frame";
-	skel_pub.publish(skels);
+	    if(users_count > 0)
+	    {
+		skels.header.stamp=tstamp;
+		skels.header.frame_id="/trep_world_frame";
+		skel_pub.publish(skels);
     
-	pmap_pub.publish(pmap);
-    }
-}
+		pmap_pub.publish(pmap);
+	    }
+	}
 
 
-void timerCallback(const ros::TimerEvent& e)
-{
-    ROS_DEBUG("timerCallback triggered");
-    g_Context.WaitAndUpdateAll();  // sits and waits for new set of user
-    // data from kinect (30 Hz)
-    static tf::TransformBroadcaster br;
-    publishData(br);  // everything important happens in this function
-}
+    void timerCallback(const ros::TimerEvent& e)
+	{
+	    ROS_DEBUG("timerCallback triggered");
+	    g_Context.WaitAndUpdateAll();  // sits and waits for new set of user
+	    // data from kinect (30 Hz)
+	    publishData();  // everything important happens in this function
+	}
 
-
-//---------------------------------------------------------------------------
-// Macros
-//---------------------------------------------------------------------------
-
-// this is a macro and needs the backslashes at the end of the line
-#define CHECK_RC(nRetVal, what)						\
-    if (nRetVal != XN_STATUS_OK)					\
-    {									\
-	printf("%s failed: %s\n", what, xnGetStatusString(nRetVal));	\
-	return nRetVal;							\
-    }
-
+}; // end of class TrackerClass
+    
 
 //---------------------------------------------------------------------------
 // MAIN
@@ -335,18 +407,13 @@ void timerCallback(const ros::TimerEvent& e)
 int main(int argc, char **argv) 
 {
     sleep(5);  // delay for openni_camera to start
-
+    
     // startup node
     ros::init(argc, argv, "skeletontracker_nu");
-    ros::NodeHandle nh_;
-
-    // define ros publishers for skels
-    pmap_pub = nh_.advertise<mapping_msgs::PolygonalMap> ("skeletonpmaps", 100);
-    skel_pub = nh_.advertise<skeletonmsgs_nu::Skeletons> ("skeletons", 100);
-    // tf::TransformBroadcaster br;
+    ros::NodeHandle node;
 
     // init from XML
-    string configFilename = ros::package::getPath("skeletontracker_nu") +
+    std::string configFilename = ros::package::getPath("skeletontracker_nu") +
 	"/kinectconfig.xml";
     XnStatus nRetVal = g_Context.InitFromXmlFile(configFilename.c_str());
     CHECK_RC(nRetVal, "InitFromXml"); 
@@ -358,24 +425,28 @@ int main(int argc, char **argv)
     // find user generator
     nRetVal = g_Context.FindExistingNode(XN_NODE_TYPE_USER, g_UserGenerator);
     if (nRetVal != XN_STATUS_OK) {
-	nRetVal = g_UserGenerator.Create(g_Context);
-	CHECK_RC(nRetVal, "Find user generator");
+        nRetVal = g_UserGenerator.Create(g_Context);
+        CHECK_RC(nRetVal, "Find user generator");
     }
 
     // check user generator support
     if (!g_UserGenerator.IsCapabilitySupported(XN_CAPABILITY_SKELETON)) {
-	printf("Supplied user generator doesn't support skeleton\n");
-	return 1;
+        printf("Supplied user generator doesn't support skeleton\n");
+        return 1;
     }
 
     // needs comment
     XnCallbackHandle hUserCallbacks;
     g_UserGenerator.RegisterUserCallbacks(User_NewUser,
-					  User_LostUser, NULL, hUserCallbacks);
+					  User_LostUser,
+					  NULL,
+					  hUserCallbacks);
     XnCallbackHandle hCalibrationCallbacks;
     g_UserGenerator.GetSkeletonCap().RegisterCalibrationCallbacks(
-	UserCalibration_CalibrationStart, UserCalibration_CalibrationEnd,
-	NULL, hCalibrationCallbacks);
+	UserCalibration_CalibrationStart,
+	UserCalibration_CalibrationEnd,
+	NULL,
+	hCalibrationCallbacks);
 
     // check if pose if supported
     if (g_UserGenerator.GetSkeletonCap().NeedPoseForCalibration())
@@ -403,9 +474,8 @@ int main(int argc, char **argv)
     nRetVal = g_Context.StartGeneratingAll();
     CHECK_RC(nRetVal, "StartGenerating");
 
-    ROS_INFO("Starting Tracker...\n");
+    TrackerClass tracker;
 
-    ros::Timer timer = nh_.createTimer(ros::Duration(0.01), timerCallback);
     ros::spin();
 
     g_Context.Shutdown();
