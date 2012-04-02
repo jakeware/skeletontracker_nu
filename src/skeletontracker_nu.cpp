@@ -29,7 +29,6 @@
 #include <XnCppWrapper.h>
 
 #include <math.h>
-// using std::string;
 
 // this is a macro and needs the backslashes at the end of the line
 #define CHECK_RC(nRetVal, what)						\
@@ -48,7 +47,6 @@ xn::UserGenerator  g_UserGenerator;
     
 XnBool g_bNeedPose = false;  
 XnChar g_strPose[20]; 
-
 
 //---------------------------------------------------------------------------
 // Classes and Globals
@@ -168,18 +166,10 @@ class TrackerClass{
 
 private:
     ros::NodeHandle nh_;
-    // xn::Context        g_Context;  
-    // xn::DepthGenerator g_DepthGenerator;  
-    // xn::UserGenerator  g_UserGenerator;  
-
-    // XnBool g_bNeedPose;  
-    // XnChar g_strPose[20]; 
-
     ros::Publisher pmap_pub;
     ros::Publisher skel_pub;
     ros::Time tstamp, tstamp_last;
     tf::TransformBroadcaster br;
-    tf::TransformListener listener;
     ros::Timer timer;
 
 public:
