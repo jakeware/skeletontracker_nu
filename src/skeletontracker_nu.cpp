@@ -241,65 +241,18 @@ public:
 				 t,
 				 "openni_depth_optical_frame",
 				 child_frame_id));
-
-	    std::string err;
-	    listener.waitForTransform(child_frame_id,
-				 "trep_world_frame",
-				 t,
-				 ros::Duration(5),
-				 ros::Duration(0.001),
-				 &err);				 
-				 
-	    try {
-		listener.lookupTransform(child_frame_id, "trep_world_frame",
-					 t, t_wj);
-	    }
-	    catch (tf::TransformException ex) {
-		ROS_WARN("%s",ex.what());
-	    }
 	    
-	    // fill out the joint data
-	    j.transform.translation.x = t_wj.getOrigin().x();
-	    j.transform.translation.y = t_wj.getOrigin().y();
-	    j.transform.translation.z = t_wj.getOrigin().z();
+	    j.transform.translation.x = transform.getOrigin().x();
+	    j.transform.translation.y = transform.getOrigin().y();
+	    j.transform.translation.z = transform.getOrigin().z();
   
-	    j.transform.rotation.x = t_wj.getRotation().x();
-	    j.transform.rotation.y = t_wj.getRotation().y();
-	    j.transform.rotation.z = t_wj.getRotation().z();
-	    j.transform.rotation.w = t_wj.getRotation().w();
+	    j.transform.rotation.x = transform.getRotation().x();
+	    j.transform.rotation.y = transform.getRotation().y();
+	    j.transform.rotation.z = transform.getRotation().z();
+	    j.transform.rotation.w = transform.getRotation().w();
 
 	    return;
 	}
-	    // get a transform from the joint to trep world frame
-	    // geometry_msgs::QuaternionStamped quat, tquat;
-	    // tf::quaternionTFToMsg(tf::Quaternion(qx,qy,qz,qw), quat.quaternion, lt);
-	    // quat.header.stamp = t;
-	    // quat.header.frame_id = child_frame_id;
-	    // try {listener.transformQuaternion("/trep_world_frame", quat, tquat);}
-	    // catch(tf::TransformException& ex){
-	    // 	ROS_WARN("Failed to transform quaternion: %s", ex.what());
-	    // }
-	    // geometry_msgs::Vector3Stamped p, tp;
-	    // p.vector.x = position.x; p.vector.y = position.y; p.vector.z = position.z;
-	    // // p.header = quat.header;
-
-	    // p.header.stamp = t;
-	    // p.header.frame_id = child_frame_id;
-
-	    // try {listener.transformVector("/trep_world_frame", t, p,
-	    // 				  "/openni_depth_optical_frame", tp);}
-	    // catch(tf::TransformException& ex){
-	    // 	ROS_WARN("Failed to transform vector: %s", ex.what());
-	    // }    
-	    // // fill out the joint data
-	    // j.transform.translation.x = tp.vector.x;
-	    // j.transform.translation.y = tp.vector.y;
-	    // j.transform.translation.z = tp.vector.z;
-  
-	    // j.transform.rotation.x = tquat.quaternion.x;
-	    // j.transform.rotation.y = tquat.quaternion.y;
-	    // j.transform.rotation.z = tquat.quaternion.z;
-	    // j.transform.rotation.w = tquat.quaternion.w;
 
  
     void publishData(void)
