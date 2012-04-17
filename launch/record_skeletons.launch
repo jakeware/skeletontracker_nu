@@ -22,8 +22,6 @@
   </node>
   <include file="$(find openni_camera)/launch/kinect_frames.launch"/>
 
-
-
   <!-- Launch skeleton tracking node with output in a new window -->
   <node pkg="skeletontracker_nu" type="skeletontracker" name="skeletontracker"  output="screen" respawn="true" launch-prefix="xterm -rv -e"/>
 	
