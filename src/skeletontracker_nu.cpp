@@ -20,8 +20,6 @@
 #include <tf/transform_datatypes.h>
 #include <kdl/frames.hpp>
 
-#include <mapping_msgs/PolygonalMap.h>
-#include <geometry_msgs/Polygon.h>
 #include <skeletonmsgs_nu/Skeletons.h>
 
 #include <XnOpenNI.h>
@@ -142,25 +140,6 @@ geometry_msgs::Point32 vecToPt3(XnVector3D pt)
 }
 
 
-void getPolygon(XnUserID user, XnSkeletonJoint eJoint1,
-		XnSkeletonJoint eJoint2, mapping_msgs::PolygonalMap &pmap)
-{
-    XnSkeletonJointPosition joint1, joint2;
-    g_UserGenerator.GetSkeletonCap().GetSkeletonJointPosition(user,
-							      eJoint1, joint1);
-    g_UserGenerator.GetSkeletonCap().GetSkeletonJointPosition(user,
-							      eJoint2, joint2);
-
-    if (joint1.fConfidence < 0.5 || joint2.fConfidence < 0.5) return;
-
-    geometry_msgs::Polygon p;
-    p.points.push_back(vecToPt3(joint1.position));
-    p.points.push_back(vecToPt3(joint2.position));
-
-    pmap.polygons.push_back(p);
-}
-
-
 class TrackerClass{
 
 
@@ -176,7 +155,6 @@ public:
     TrackerClass(){
 	
 	// define ros publishers for skels
-	pmap_pub = nh_.advertise<mapping_msgs::PolygonalMap> ("skeletonpmaps", 100);
 	skel_pub = nh_.advertise<skeletonmsgs_nu::Skeletons> ("skeletons", 100);
 	timer = nh_.createTimer(ros::Duration(0.01), &TrackerClass::timerCallback, this);
 
@@ -252,7 +230,6 @@ public:
 
 	    int users_count = 0;
 	    skeletonmsgs_nu::Skeletons skels;
-	    mapping_msgs::PolygonalMap pmap;
   
 	    XnUserID users[15];
 	    XnUInt16 users_max = 15;
@@ -263,27 +240,6 @@ public:
 
 		if (g_UserGenerator.GetSkeletonCap().IsTracking(user)) {
 		    users_count++;
-
-		    getPolygon(user, XN_SKEL_HEAD, XN_SKEL_NECK, pmap);
-		    getPolygon(user, XN_SKEL_NECK, XN_SKEL_LEFT_SHOULDER, pmap);
-		    getPolygon(user, XN_SKEL_LEFT_SHOULDER, XN_SKEL_LEFT_ELBOW, pmap);
-		    getPolygon(user, XN_SKEL_LEFT_SHOULDER, XN_SKEL_RIGHT_SHOULDER, pmap);
-		    getPolygon(user, XN_SKEL_LEFT_ELBOW, XN_SKEL_LEFT_HAND, pmap);
-		    getPolygon(user, XN_SKEL_NECK, XN_SKEL_RIGHT_SHOULDER, pmap);
-		    getPolygon(user, XN_SKEL_RIGHT_SHOULDER, XN_SKEL_RIGHT_ELBOW, pmap);
-		    getPolygon(user, XN_SKEL_RIGHT_ELBOW, XN_SKEL_RIGHT_HAND, pmap);
-		    getPolygon(user, XN_SKEL_LEFT_SHOULDER, XN_SKEL_TORSO, pmap);
-		    getPolygon(user, XN_SKEL_RIGHT_SHOULDER, XN_SKEL_TORSO, pmap);
-		    getPolygon(user, XN_SKEL_TORSO, XN_SKEL_LEFT_HIP, pmap);
-		    getPolygon(user, XN_SKEL_LEFT_HIP, XN_SKEL_LEFT_KNEE, pmap);
-		    getPolygon(user, XN_SKEL_LEFT_KNEE, XN_SKEL_LEFT_FOOT, pmap);
-		    getPolygon(user, XN_SKEL_TORSO, XN_SKEL_RIGHT_HIP, pmap);
-		    getPolygon(user, XN_SKEL_RIGHT_HIP, XN_SKEL_RIGHT_KNEE, pmap);
-		    getPolygon(user, XN_SKEL_RIGHT_KNEE, XN_SKEL_RIGHT_FOOT, pmap);
-		    getPolygon(user, XN_SKEL_LEFT_HIP, XN_SKEL_RIGHT_HIP, pmap);
-
-		    pmap.header.stamp=tstamp;
-		    pmap.header.frame_id="/openni_depth_optical_frame"; 
 
 		    skeletonmsgs_nu::Skeleton skel;
 		    skel.userid=user;
@@ -326,8 +282,6 @@ public:
 		skels.header.stamp=tstamp;
 		skels.header.frame_id="/trep_world_frame";
 		skel_pub.publish(skels);
-    
-		pmap_pub.publish(pmap);
 	    }
 	}
 
