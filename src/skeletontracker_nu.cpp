@@ -207,7 +207,7 @@ public:
 	    br.sendTransform(tf::StampedTransform(
 				 transform,
 				 t,
-				 "openni_depth_optical_frame",
+				 "camera_depth_optical_frame",
 				 child_frame_id));
 	    
 	    j.transform.translation.x = transform.getOrigin().x();
