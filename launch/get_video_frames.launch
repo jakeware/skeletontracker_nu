@@ -2,10 +2,11 @@
   <arg name="file" default="default.bag" />
   <arg name="dir" default="$(find skeletontracker_nu)/data/" />
   <arg name="topic" default="/camera/rgb/image_color" />
+  <arg name="rate" default="0.005" />
   <node pkg="rosbag" type="play" name="rosbag" args=" -d 2 $(arg dir)/$(arg file)"/>
   <node name="extract" pkg="image_view" type="extract_images" respawn="false" output="screen">
     <remap from="image" to="$(arg topic)"/>
     <param name="filename_format" value="$(arg dir)/frame%06i.jpg" />
-    <param name="sec_per_frame" value="0.033" />
+    <param name="sec_per_frame" value="$(arg rate)" />
   </node>
 </launch>
