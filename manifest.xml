@@ -11,8 +11,11 @@
   <depend package="roscpp"/>
   <depend package="roslib"/>
   <depend package="geometry_msgs"/>
-  <depend package="openni"/>
   <depend package="kdl"/>
   <depend package="tf"/>
   <depend package="skeletonmsgs_nu"/>
+
+  <rosdep name="openni-dev"/>
+  <rosdep name="ps-engine" />
+
 </package>

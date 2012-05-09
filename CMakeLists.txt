@@ -26,6 +26,9 @@ link_directories (${LIBUSB_LIBRARY_DIRS})
 #include(${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake)
 #gencfg()
 
+include_directories(/usr/include/openni)
 rosbuild_add_executable(skeletontracker src/skeletontracker_nu.cpp)
+target_link_libraries(skeletontracker OpenNI)
+
 
 
