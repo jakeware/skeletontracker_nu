@@ -1,6 +1,3 @@
-# ignore these files
-./Makefile
-
 # ignore these directories and the files in them.
 *~
 bin/
