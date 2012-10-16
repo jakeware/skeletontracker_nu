@@ -202,13 +202,15 @@ public:
 	    tf::StampedTransform t_wj;
 	    ros::Time t;
 	    t = ros::Time::now();
+	    std::stringstream frame;
+	    frame << child_frame_id << "_" << user;
 	    transform.setOrigin(tf::Vector3(position.x, position.y, position.z));
 	    transform.setRotation(tf::Quaternion(qx, qy, qz, qw));
 	    br.sendTransform(tf::StampedTransform(
 				 transform,
 				 t,
 				 "camera_depth_optical_frame",
-				 child_frame_id));
+				 frame.str()));
 	    
 	    j.transform.translation.x = transform.getOrigin().x();
 	    j.transform.translation.y = transform.getOrigin().y();
@@ -280,7 +282,7 @@ public:
 	    if(users_count > 0)
 	    {
 		skels.header.stamp=tstamp;
-		skels.header.frame_id="/trep_world_frame";
+		skels.header.frame_id="camera_depth_frame";
 		skel_pub.publish(skels);
 	    }
 	}
