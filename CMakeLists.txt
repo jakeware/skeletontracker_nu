@@ -32,7 +32,7 @@ link_directories(${catkin_LIBRARY_DIRS})
 link_directories(${orocos_kdl_LIBRARY_DIRS})
 
 add_executable(skeletontracker src/skeletontracker_nu.cpp)
-add_dependencies(skeletontracker geometry_msgs_gencpp)
+add_dependencies(skeletontracker skeletonmsgs_nu)
 
 target_link_libraries(skeletontracker ${catkin_LIBRARIES}
   ${OpenNI_LIBRARIES}
