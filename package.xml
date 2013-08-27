@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<package>
+  <version>0.0.1</version>
+  <name>skeletontracker_nu</name>
+  <description>
+    skeletontracker_nu broadcasts the OpenNI skeleton frames using tf.  This
+    package is based on Willow Labs skeletal_tracker package by Time Field and
+    the Kinect MIT packages.
+  </description>
+  
+  <maintainer email="JarvisSchultz2012@u.northwestern.edu">Jarvis Schultz</maintainer>
+  <author>Jake Ware</author>
+  <license>BSD</license>
+
+  <!--Dependencies-->
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>roscpp</build_depend>
+  <build_depend>roslib</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>orocos_kdl</build_depend>
+  <build_depend>tf</build_depend>
+  <build_depend>skeletonmsgs_nu</build_depend>
+
+  <build_depend>libopenni-dev</build_depend>
+  <build_depend>libusb-1.0-dev</build_depend>
+  <build_depend>libopenni-nite-dev</build_depend>
+  <build_depend>libopenni-sensor-primesense-dev</build_depend>
+  <!-- ===== -->
+</package>

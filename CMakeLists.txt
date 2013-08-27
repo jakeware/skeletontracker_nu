@@ -1,15 +1,41 @@
-cmake_minimum_required(VERSION 2.4.6)
-include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
+cmake_minimum_required(VERSION 2.8.3)
 
-rosbuild_init()
-rosbuild_make_distribution(0.1.3)
+project(skeletontracker_nu)
 
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
+find_package(orocos_kdl REQUIRED)
+find_package(catkin REQUIRED COMPONENTS geometry_msgs
+					roscpp
+					roslib
+					tf
+					skeletonmsgs_nu)
+# Find OpenNI
+find_package(PkgConfig)
+pkg_check_modules(OpenNI REQUIRED libopenni)
 
-include(FindPkgConfig)
-pkg_check_modules(OPENNI libopenni)
+# Find Nite
+find_path(Nite_INCLUDEDIR
+	  NAMES XnVNite.h
+	  HINTS /usr/include/nite /usr/local/include/nite)
+find_library(Nite_LIBRARY
+	     NAMES XnVNite_1_3_1
+	     HINTS /usr/lib /usr/local/lib
+	     PATH_SUFFIXES lib) 
 
+catkin_package()
 
-include_directories(${OPENNI_INCLUDEDIR} /usr/include/nite)
-rosbuild_add_executable(skeletontracker src/skeletontracker_nu.cpp)
-target_link_libraries(skeletontracker ${OPENNI_LIBRARIES})
+include_directories(${catkin_INCLUDEDIR}
+		    ${OpenNI_INCLUDEDIR}
+		    ${Nite_INCLUDEDIR}
+		    ${orocos_kdl_INCLUDE_DIRS})
+
+link_directories(${catkin_LIBRARY_DIRS})
+link_directories(${orocos_kdl_LIBRARY_DIRS})
+
+add_executable(skeletontracker src/skeletontracker_nu.cpp)
+add_dependencies(skeletontracker geometry_msgs_gencpp)
+
+target_link_libraries(skeletontracker ${catkin_LIBRARIES}
+  ${OpenNI_LIBRARIES}
+  ${Nite_LIBRARY}
+  ${orocos_kdl_LIBRARIES})
+

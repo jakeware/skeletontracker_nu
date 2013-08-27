@@ -20,7 +20,7 @@
 #include <tf/transform_datatypes.h>
 #include <kdl/frames.hpp>
 
-#include <skeletonmsgs_nu/Skeletons.h>
+#include "skeletonmsgs_nu/Skeletons.h"
 
 #include <XnOpenNI.h>
 #include <XnCodecIDs.h>
@@ -278,12 +278,12 @@ public:
 	    }
   
 	    ROS_DEBUG("users_count: %i", users_count);
-  
 	    if(users_count > 0)
 	    {
 		skels.header.stamp=tstamp;
 		skels.header.frame_id="camera_depth_frame";
 		skel_pub.publish(skels);
+		// ros::spinOnce();
 	    }
 	}
 
